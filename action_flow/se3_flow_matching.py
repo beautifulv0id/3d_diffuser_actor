@@ -110,7 +110,7 @@ class SE3FlowMatching(nn.Module):
         trajectory, gripper_open = self.conditional_sample(obs)
 
         # Back to quaternion
-        trajectory = self.unconvert_rot(trajectory, gripper_open > 0.5)
+        trajectory = self.unconvert_rot(trajectory, gripper_open)
         # unnormalize position
         trajectory[:, :, :3] = self.unnormalize_pos(trajectory[:, :, :3])
 
