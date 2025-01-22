@@ -39,7 +39,7 @@ class SE3FlowMatching(nn.Module):
             )
         encoder = SE3GraspPointCloudSuperEncoder(
             dim_features=embedding_dim,
-            depth=6,
+            depth=3,
             nheads=8,
             n_steps_inf=50,
             fps_subsampling_factor=fps_subsampling_factor,

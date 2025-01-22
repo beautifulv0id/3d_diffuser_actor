@@ -1,5 +1,9 @@
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
+import pytorch3d.ops.sample_farthest_points as fps
+from pytorch3d.ops.knn import knn_points
+import einops
 from geo3dattn.model.common.module_attr_mixin import ModuleAttrMixin
 from geo3dattn.encoder.superpoint_encoder.super_point_encoder import SuperPointEncoder
 from geo3dattn.model.ursa_transformer.ursa_transformer import URSATransformerEncoder, URSATransformer
@@ -7,11 +11,82 @@ from geo3dattn.encoder.common.position_encoder import PositionalEncoding
 from diffuser_actor.utils.layers import ParallelAttention
 from diffuser_actor.utils.resnet import load_resnet50, load_resnet18
 from diffuser_actor.utils.clip import load_clip
-import einops
 
-from torch.nn import functional as F
 
-    
+def load_model(output_dim, nhead, num_layers, modeltype='ursa'):
+    if modeltype == 'ursa':
+        from geo3dattn.model.ursa_transformer.ursa_transformer import URSATransformer
+        return URSATransformer(output_dim, nhead=nhead, num_layers=num_layers)
+    elif modeltype=='rope3d':
+        from geo3dattn.model.rope3d_transformer.rope_3d_transformer import RoPE3DTransformer
+        return RoPE3DTransformer(output_dim, nhead=nhead, num_layers=num_layers)
+    elif modeltype=='direct':
+        from geo3dattn.model.direct_transformer.direct_transformer import DirectTransformer
+        return DirectTransformer(output_dim, nhead=nhead, num_layers=num_layers)
+    elif modeltype=='point_distance':
+        from geo3dattn.model.direct_transformer.direct_transformer import DirectTransformer
+        return DirectTransformer(output_dim, nhead=nhead, num_layers=num_layers)
+
+
+class SuperPointEncoder(nn.Module):
+    def __init__(self, input_dim, output_dim=256, fps_subsampling_factor=14,
+                 nheads = 4, num_layers = 2, knn = 10, model_type='ursa'):
+        super(SuperPointEncoder, self).__init__()
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.fps_subsampling_factor = fps_subsampling_factor
+        self.knn = knn
+
+        self.linear = nn.Linear(input_dim, output_dim)
+
+        self.model = load_model(output_dim, nheads, num_layers, modeltype=model_type)
+
+    def forward(self, tgt, geometric_args):
+
+        x = tgt
+        pcd_x = geometric_args['query']['centers']
+        pcd_v = geometric_args['query']['vectors']
+
+        n_points_out = x.shape[1] // self.fps_subsampling_factor
+        ## Get n points via FPS ##
+        out_pcd_x, out_indices = fps(pcd_x, K=n_points_out)
+
+
+        ## Find KNN to Output Points ##
+        k = self.knn
+        out = knn_points(out_pcd_x, pcd_x, K=k)
+        ## Given index (B,Q,K) with B batch and pcd (B,N,3), select (B,Q,K,3) ##
+        knn_pcd = torch.gather(pcd_x.unsqueeze(1).expand(-1, n_points_out, -1, -1), 2, out[1].unsqueeze(-1).expand(-1, -1, -1, 3))
+
+        ## Prepare data
+        ## For the computation we move each SuperPoint to the batch and transform the KNN to the key tokens
+        query_f = torch.gather(x, 1, out_indices.unsqueeze(-1).expand(-1, -1, x.shape[-1]))
+        _query_f = query_f.reshape(-1, query_f.shape[-1])[:,None,:]
+        query_c = out_pcd_x
+        _query_c = query_c.reshape(-1, query_c.shape[-1])[:,None,:]
+        query_v = torch.gather(pcd_v, 1, out_indices[...,None, None].expand(-1, -1, pcd_v.shape[-2], pcd_v.shape[-1]))
+        _query_v = query_v.reshape(-1, query_v.shape[-2], query_v.shape[-1])[:,None,...]
+        _query_geo = {'centers': _query_c, 'vectors': _query_v}
+
+        key_f = torch.gather(x.unsqueeze(1).expand(-1, n_points_out, -1, -1), 2, out[1].unsqueeze(-1).expand(-1, -1, -1, x.shape[-1]))
+        _key_f = key_f.reshape(-1, key_f.shape[2], key_f.shape[3])
+        key_c = knn_pcd
+        _key_c = key_c.reshape(-1, key_c.shape[2], key_c.shape[3])
+        key_v = torch.gather(pcd_v.unsqueeze(1).expand(-1, n_points_out, -1, -1, -1), 2, out[1].unsqueeze(-1).unsqueeze(-1).expand(-1, -1, -1, pcd_v.shape[-2], pcd_v.shape[-1]))
+        _key_v = key_v.reshape(-1, key_v.shape[2], key_v.shape[3], key_v.shape[4])
+        _key_geo = {'centers': _key_c, 'vectors': _key_v}
+
+        ## Compute the attention
+        _geo = {'query': _query_geo, 'key': _key_geo}
+        _key_f = self.linear(_key_f)
+        _query_f = self.linear(_query_f)
+        out_query_f = self.model(_query_f, _key_f, geometric_args=_geo)
+
+        ## Reshape the output
+        out_query_f = out_query_f.reshape(-1, n_points_out, out_query_f.shape[-1])
+        return out_query_f, {'query':{'centers': query_c, 'vectors': query_v}}
+
+
 class SE3GraspPointCloudSuperEncoder(ModuleAttrMixin):
     def __init__(self, dim_features=128, depth=3, nheads=4, n_steps_inf=50, fps_subsampling_factor=5, nhist=3, dim_pcd_features=64, num_vis_ins_attn_layers=2):
         super(SE3GraspPointCloudSuperEncoder, self).__init__()

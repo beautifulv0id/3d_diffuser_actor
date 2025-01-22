@@ -31,7 +31,7 @@ class BaseTrainTester:
             self.wandb_run = wandb.init(
                 dir=str(args.log_dir),
                 config=args,
-                name="train_3d_diffuser_actor"
+                name=str(args.name)
             )
 
     @staticmethod

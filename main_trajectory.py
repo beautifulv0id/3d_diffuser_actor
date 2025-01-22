@@ -50,6 +50,7 @@ class Arguments(tap.Tap):
     base_log_dir: Path = Path(__file__).parent / "train_logs"
     exp_log_dir: str = "exp"
     run_log_dir: str = "run"
+    name: str = 'train_3d_diffuser_actor'
 
     # Main training parameters
     num_workers: int = 1
