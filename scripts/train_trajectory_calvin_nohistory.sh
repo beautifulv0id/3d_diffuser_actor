@@ -1,4 +1,5 @@
-main_dir=Planner_Calvin
+config_name=Planner_Calvin
+main_dir=$(./scripts/get_log_path.sh $config_name)
 
 dataset=./data/calvin/packaged_ABC_D/training
 valset=./data/calvin/packaged_ABC_D/validation

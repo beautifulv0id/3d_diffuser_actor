@@ -7,7 +7,8 @@
 #SBATCH --output=train_logs/slurm_logs/%j_train.out
 #SBATCH -J actor
 
-main_dir=Actor_18Peract_100Demo_multitask
+config_name=Actor_18Peract_100Demo_multitask
+main_dir=$(./scripts/get_log_path.sh $config_name)
 
 dataset=/home/share/3D_attn_felix/Peract_packaged/train
 valset=/home/share/3D_attn_felix/Peract_packaged/val

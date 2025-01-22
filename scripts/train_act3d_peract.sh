@@ -1,4 +1,5 @@
-main_dir=Act3d_18Peract_100Demo_multitask
+config_name=Act3d_18Peract_100Demo_multitask
+main_dir=$(./scripts/get_log_path.sh $config_name)
 
 dataset=data/peract/Peract_packaged/train
 valset=data/peract/Peract_packaged/val

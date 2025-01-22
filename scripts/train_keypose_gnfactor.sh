@@ -1,4 +1,5 @@
-main_dir=Actor_18Peract_20Demo_10GNFactortask
+config_name=Actor_18Peract_20Demo_10GNFactortask
+main_dir=$(./scripts/get_log_path.sh $config_name)
 
 dataset=data/peract/Peract_packaged/train
 valset=data/peract/Peract_packaged/val

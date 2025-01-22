@@ -1,4 +1,5 @@
-main_dir=Actor_18Peract_100Demo_multitask
+config_name=Actor_18Peract_100Demo_multitask
+main_dir=$(./scripts/get_log_path.sh $config_name)
 
 dataset=/data/diffuser_actor.zarr
 

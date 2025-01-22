@@ -7,7 +7,8 @@
 #SBATCH --output=train_logs/slurm_logs/%j_train.out
 #SBATCH -J pointattnzarr
 
-main_dir=PointAttnZarr_18Peract_100Demo_multitask
+config_name=PointAttnZarr_18Peract_100Demo_multitask
+main_dir=$(./scripts/get_log_path.sh $config_name)
 
 dataset=/home/share/3D_attn_felix/diffuser_actor.zarr
 
