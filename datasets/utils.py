@@ -11,6 +11,20 @@ import torchvision.transforms.functional as transforms_f
 
 from diffuser_actor.utils.utils import normalise_quat
 
+from typing import Dict, Callable, List
+
+def dict_apply(
+        x: Dict[str, torch.Tensor], 
+        func: Callable[[torch.Tensor], torch.Tensor]
+        ) -> Dict[str, torch.Tensor]:
+    result = dict()
+    for key, value in x.items():
+        if isinstance(value, dict):
+            result[key] = dict_apply(value, func)
+        else:
+            result[key] = func(value)
+    return result
+
 
 def loader(file):
     if str(file).endswith(".npy"):
@@ -52,8 +66,8 @@ class Resize:
         # Sample resize scale from continuous range
         sc = np.random.uniform(*self.scales)
 
-        t, n, c, raw_h, raw_w = kwargs[keys[0]].shape
-        kwargs = {n: arg.flatten(0, 1) for n, arg in kwargs.items()}
+        n, c, raw_h, raw_w = kwargs[keys[0]].shape
+        kwargs = {n: arg for n, arg in kwargs.items()}
         resized_size = [int(raw_h * sc), int(raw_w * sc)]
 
         # Resize
@@ -86,11 +100,6 @@ class Resize:
         )
         kwargs = {
             n: transforms_f.crop(arg, i, j, h, w) for n, arg in kwargs.items()
-        }
-
-        kwargs = {
-            n: einops.rearrange(arg, "(t n) c h w -> t n c h w", t=t)
-            for n, arg in kwargs.items()
         }
 
         return kwargs
