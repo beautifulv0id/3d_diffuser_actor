@@ -1,4 +1,4 @@
-import dgl.geometry as dgl_geo
+import pytorch3d.ops.sample_farthest_points as fps
 import einops
 import torch
 from torch import nn
@@ -141,7 +141,7 @@ class Encoder(nn.Module):
         )
 
         # Rotary positional encoding
-        gripper_pos = self.relative_pe_layer(gripper[..., :3])
+        gripper_pos = self.relative_pe_layer(gripper[..., :3, -1])
         context_pos = self.relative_pe_layer(context)
 
         gripper_feats = einops.rearrange(
@@ -242,31 +242,15 @@ class Encoder(nn.Module):
         npts, bs, ch = context_features.shape
 
         # Sample points with FPS
-        sampled_inds = dgl_geo.farthest_point_sampler(
-            einops.rearrange(
-                context_features,
-                "npts b c -> b npts c"
-            ).to(torch.float64),
-            max(npts // self.fps_subsampling_factor, 1), 0
-        ).long()
+        tgt_pts = npts // self.fps_subsampling_factor
 
-        # Sample features
-        expanded_sampled_inds = sampled_inds.unsqueeze(-1).expand(-1, -1, ch)
-        sampled_context_features = torch.gather(
-            context_features,
-            0,
-            einops.rearrange(expanded_sampled_inds, "b npts c -> npts b c")
-        )
-
-        # Sample positional embeddings
+        # Sample points with FPS
+        sampled_context_features, out_indices = fps(context_features.transpose(0,1), K=tgt_pts)
+        sampled_context_features = sampled_context_features.transpose(0,1)
         _, _, ch, npos = context_pos.shape
-        expanded_sampled_inds = (
-            sampled_inds.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, ch, npos)
-        )
-        sampled_context_pos = torch.gather(
-            context_pos, 1, expanded_sampled_inds
-        )
-        return sampled_context_features, sampled_context_pos
+        sampled_context_pcd = torch.gather(context_pos, 1, out_indices.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, ch, npos))
+        return sampled_context_features, sampled_context_pcd
+
 
     def vision_language_attention(self, feats, instr_feats):
         feats, _ = self.vl_attention[0](

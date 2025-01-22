@@ -13,6 +13,7 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import trange
+import wandb
 
 
 class BaseTrainTester:
@@ -27,6 +28,11 @@ class BaseTrainTester:
 
         if dist.get_rank() == 0:
             self.writer = SummaryWriter(log_dir=args.log_dir)
+            self.wandb_run = wandb.init(
+                dir=str(args.log_dir),
+                config=args,
+                name="train_3d_diffuser_actor"
+            )
 
     @staticmethod
     def get_datasets():
@@ -236,11 +242,15 @@ class BaseTrainTester:
         if not is_dist_avail_and_initialized() or dist.get_rank() == 0:
             merged = {}
             for key in all_dicts[0].keys():
-                device = all_dicts[0][key].device
-                merged[key] = torch.cat([
-                    p[key].to(device) for p in all_dicts
-                    if key in p
-                ])
+                if torch.is_tensor(all_dicts[0][key]):
+                    device = all_dicts[0][key].device
+                    merged[key] = torch.cat([
+                        p[key].to(device) for p in all_dicts
+                        if key in p
+                    ])
+                else:
+                    merged[key] = []
+                    [merged[key].extend(p[key]) for p in all_dicts if key in p]
             a_dict = merged
         return a_dict
 

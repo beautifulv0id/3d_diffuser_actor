@@ -1,16 +1,16 @@
 main_dir=Actor_18Peract_100Demo_multitask
 
-dataset=data/peract/Peract_packaged/train
-valset=data/peract/Peract_packaged/val
+dataset=~/data/Peract_packaged/train
+valset=~/data/Peract_packaged/val
 
 lr=1e-4
 dense_interpolation=1
 interpolation_length=2
 num_history=3
 diffusion_timesteps=100
-B=8
+B=2
 C=120
-ngpus=6
+ngpus=1
 quaternion_format=xyzw
 
 CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
@@ -18,7 +18,7 @@ CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --tasks place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap \
     --dataset $dataset \
     --valset $valset \
-    --instructions instructions/peract/instructions.pkl \
+    --instructions ~/data/rlbench_instructions/instructions.pkl \
     --gripper_loc_bounds tasks/18_peract_tasks_location_bounds.json \
     --num_workers 1 \
     --train_iters 600000 \

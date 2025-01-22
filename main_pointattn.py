@@ -16,7 +16,7 @@ from torch.nn import functional as F
 
 from datasets.dataset_engine import RLBenchDataset
 from engine import BaseTrainTester
-from diffuser_actor import DiffuserActor
+from action_flow.se3_flow_matching import SE3FlowMatching
 
 from utils.common_utils import (
     load_instructions, count_parameters, get_gripper_loc_bounds
@@ -79,6 +79,7 @@ class Arguments(tap.Tap):
     relative_action: int = 0
     lang_enhanced: int = 0
     fps_subsampling_factor: int = 5
+    scaling_factor: float = 3.0
 
 
 class TrainTester(BaseTrainTester):
@@ -144,7 +145,7 @@ class TrainTester(BaseTrainTester):
     def get_model(self):
         """Initialize the model."""
         # Initialize model with arguments
-        _model = DiffuserActor(
+        _model = SE3FlowMatching(
             backbone=self.args.backbone,
             image_size=tuple(int(x) for x in self.args.image_size.split(",")),
             embedding_dim=self.args.embedding_dim,
@@ -157,7 +158,8 @@ class TrainTester(BaseTrainTester):
             diffusion_timesteps=self.args.diffusion_timesteps,
             nhist=self.args.num_history,
             relative=bool(self.args.relative_action),
-            lang_enhanced=bool(self.args.lang_enhanced)
+            lang_enhanced=bool(self.args.lang_enhanced),
+            scaling_factor=args.scaling_factor
         )
         print("Model parameters:", count_parameters(_model))
 

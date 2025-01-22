@@ -1,0 +1,338 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import einops
+from diffuser_actor.utils.encoder import Encoder
+from diffuser_actor.utils.layers import ParallelAttention
+from diffuser_actor.utils.utils import (
+    normalise_quat,
+    matrix_to_quaternion,
+    quaternion_to_matrix
+)
+from action_flow.utils.geometry import se3_from_rot_pos
+from action_flow.utils.encoder import SE3GraspPointCloudSuperEncoder
+from action_flow.utils.se3_grasp_vector_field import SE3GraspVectorField
+
+from geo3dattn.policy.se3_flowmatching.common.se3_flowmatching import RectifiedLinearFlow
+from geo3dattn.model.ursa_transformer.ursa_transformer import URSATransformer
+
+class SE3FlowMatching(nn.Module):
+
+    def __init__(self,
+                 backbone="clip",
+                 image_size=(256, 256),
+                 embedding_dim=60,
+                 num_vis_ins_attn_layers=2,
+                 use_instruction=False,
+                 fps_subsampling_factor=5,
+                 gripper_loc_bounds=None,
+                 rotation_parametrization='6D',
+                 quaternion_format='xyzw',
+                 diffusion_timesteps=100,
+                 nhist=3,
+                 relative=False,
+                 lang_enhanced=False,
+                 scaling_factor=3.0,):
+        super().__init__()
+        self._rotation_parametrization = rotation_parametrization
+        self._quaternion_format = quaternion_format
+        self._relative = relative
+        self.use_instruction = use_instruction
+        self.encoder = Encoder(
+            backbone=backbone,
+            image_size=image_size,
+            embedding_dim=embedding_dim,
+            num_sampling_level=1,
+            nhist=nhist,
+            num_vis_ins_attn_layers=num_vis_ins_attn_layers,
+            fps_subsampling_factor=fps_subsampling_factor
+        )
+        encoder = SE3GraspPointCloudSuperEncoder(
+            dim_features=embedding_dim,
+            depth=6,
+            nheads=8,
+            n_steps_inf=50,
+            subsampling_factor=fps_subsampling_factor,
+            nhist=nhist,
+            dim_pcd_features=embedding_dim
+        )
+        decoder = URSATransformer(d_model=embedding_dim, nhead=8, num_layers=4, dropout=0.2, distance_scale=0.0)
+        self.model = SE3GraspVectorField(
+            encoder=encoder, 
+            decoder=decoder, 
+            latent_dim=embedding_dim)
+
+        ## Flow Model ##
+        self.scaling_factor = torch.tensor(scaling_factor, requires_grad=False)
+        self.flow = RectifiedLinearFlow(n_action_steps=1, num_steps=diffusion_timesteps)
+
+        self.n_steps = diffusion_timesteps
+        self.gripper_loc_bounds = torch.tensor(gripper_loc_bounds)
+
+    # ========= utils  ============
+    def vec_to_pose(self, vec):
+        p, r = self.flow._vector_to_pose(vec)
+        H = torch.eye(4)[None, None, ...].repeat(vec.shape[0], vec.shape[1], 1, 1).to(vec.device)
+        H[:, :, :3, -1] = p
+        H[:, :, :3, :3] = r
+        return H
+
+    def pose_to_vec(self, H):
+        p, r = H[:, :, :3, -1], H[:, :, :3, :3]
+        vec = self.flow._pose_to_vector(p, r)
+        return vec
+
+    def normalize_pos(self, pos):
+        pos_min = self.gripper_loc_bounds[0].float().to(pos.device)
+        pos_max = self.gripper_loc_bounds[1].float().to(pos.device)
+        return (pos - pos_min) / (pos_max - pos_min) * 2.0 - 1.0
+
+    def unnormalize_pos(self, pos):
+        pos_min = self.gripper_loc_bounds[0].float().to(pos.device)
+        pos_max = self.gripper_loc_bounds[1].float().to(pos.device)
+        return (pos + 1.0) / 2.0 * (pos_max - pos_min) + pos_min
+
+
+    def encode_inputs(self, visible_rgb, visible_pcd, instruction,
+                      curr_gripper):
+        # Compute visual features/positional embeddings at different scales
+        rgb_feats_pyramid, pcd_pyramid = self.encoder.encode_images(
+            visible_rgb, visible_pcd
+        )
+        # Keep only low-res scale
+        context_feats = einops.rearrange(
+            rgb_feats_pyramid[0],
+            "b ncam c h w -> b (ncam h w) c"
+        )
+        context = pcd_pyramid[0]
+
+        # Encode instruction (B, 53, F)
+        instr_feats = None
+        if self.use_instruction:
+            instr_feats, _ = self.encoder.encode_instruction(instruction)
+
+        # Cross-attention vision to language
+        if self.use_instruction:
+            # Attention from vision to language
+            context_feats = self.encoder.vision_language_attention(
+                context_feats, instr_feats
+            )
+
+        # Encode gripper history (B, nhist, F)
+        adaln_gripper_feats, _ = self.encoder.encode_curr_gripper(
+            curr_gripper, context_feats, context
+        )
+
+        # FPS on visual features (N, B, F) and (B, N, F, 2)
+        fps_feats, fps_pos = self.encoder.run_fps(
+            context_feats.transpose(0, 1),
+            self.encoder.relative_pe_layer(context)
+        )
+        fps_feats = fps_feats.transpose(0, 1)
+        return (
+            context_feats, context,  # contextualized visual features
+            instr_feats,  # language features
+            adaln_gripper_feats,  # gripper history features
+            fps_feats, fps_pos  # sampled visual features
+        )
+
+
+    def conditional_sample(self, obs):
+        B = obs["pcd"].shape[0]
+        self.model.set_context(*self.model.encode_obs(obs))
+        # Iterative denoising
+        with torch.no_grad():
+            at = self.flow.generate_random_initial_pose(B)
+            for s in range(0, self.flow.num_steps):
+                step = s * torch.ones_like(at[:, 0, 0])
+                at_H = self.vec_to_pose(at)
+                d_act, gripper_open = self.model.forward_act({
+                    'act': at_H,
+                    'time':step})
+                at = self.flow.step(at, d_act, s)
+
+        trajectory = self.vec_to_pose(at)
+
+        return trajectory, gripper_open
+
+    def compute_trajectory(
+        self,
+        trajectory_mask,
+        rgb_obs,
+        pcd_obs,
+        instruction,
+        curr_gripper
+    ):
+        # Normalize all pos
+        pcd_obs = pcd_obs.clone()
+        curr_gripper = curr_gripper.clone()
+        pcd_obs = torch.permute(self.normalize_pos(
+            torch.permute(pcd_obs, [0, 1, 3, 4, 2])
+        ), [0, 1, 4, 2, 3])
+        curr_gripper[..., :3] = self.normalize_pos(curr_gripper[..., :3])
+        curr_gripper, _ = self.convert_rot(curr_gripper)
+
+        # Prepare inputs
+        context_feats, context, instr_feats, \
+            adaln_gripper_feats, \
+            fps_feats, fps_pos \
+                  = self.encode_inputs(
+            rgb_obs, pcd_obs, instruction, curr_gripper
+        )
+
+        obs = {
+            'pcd': context,
+            'current_gripper': curr_gripper,
+            'pcd_features': context_feats,
+            'instruction': instr_feats
+        }        
+
+        # Sample
+        trajectory, gripper_open = self.conditional_sample(obs)
+
+        # Back to quaternion
+        trajectory = self.unconvert_rot(trajectory, gripper_open > 0.5)
+        # unnormalize position
+        trajectory[:, :, :3] = self.unnormalize_pos(trajectory[:, :, :3])
+
+        return trajectory
+
+
+    def convert_rot(self, signal):
+        signal = signal.clone()
+        signal[..., 3:7] = normalise_quat(signal[..., 3:7])
+        # The following code expects wxyz quaternion format!
+        if self._quaternion_format == 'xyzw':
+            signal[..., 3:7] = signal[..., (6, 3, 4, 5)]
+        rot = quaternion_to_matrix(signal[..., 3:7])
+        res = signal[..., 7:] if signal.size(-1) > 7 else None
+        H = se3_from_rot_pos(rot, signal[..., :3])
+        return H, res
+
+    def unconvert_rot(self, H, res=None):
+        quat = matrix_to_quaternion(H[..., :3, :3])
+        pos = H[..., :3, 3]
+        signal = torch.cat([pos, quat], dim=-1)
+        if res is not None:
+            signal = torch.cat((signal, res), -1)
+        # The above code handled wxyz quaternion format!
+        if self._quaternion_format == 'xyzw':
+            signal[..., 3:7] = signal[..., (4, 5, 6, 3)]
+        return signal
+
+
+    def convert2rel(self, pcd, curr_gripper):
+        """Convert coordinate system relaative to current gripper."""
+        center = curr_gripper[:, -1, :3]  # (batch_size, 3)
+        bs = center.shape[0]
+        pcd = pcd - center.view(bs, 1, 3, 1, 1)
+        curr_gripper = curr_gripper.clone()
+        curr_gripper[..., :3] = curr_gripper[..., :3] - center.view(bs, 1, 3)
+        return pcd, curr_gripper
+
+    def forward(
+        self,
+        gt_trajectory,
+        trajectory_mask,
+        rgb_obs,
+        pcd_obs,
+        instruction,
+        curr_gripper,
+        run_inference=False
+    ):
+        """
+        Arguments:
+            gt_trajectory: (B, trajectory_length, 3+4+X)
+            trajectory_mask: (B, trajectory_length)
+            timestep: (B, 1)
+            rgb_obs: (B, num_cameras, 3, H, W) in [0, 1]
+            pcd_obs: (B, num_cameras, 3, H, W) in world coordinates
+            instruction: (B, max_instruction_length, 512)
+            curr_gripper: (B, nhist, 3+4+X)
+
+        Note:
+            Regardless of rotation parametrization, the input rotation
+            is ALWAYS expressed as a quaternion form.
+            The model converts it to 6D internally if needed.
+        """
+        if self._relative:
+            pcd_obs, curr_gripper = self.convert2rel(pcd_obs, curr_gripper)
+        if gt_trajectory is not None:
+            gt_openess = gt_trajectory[..., 7:]
+            gt_trajectory = gt_trajectory[..., :7]
+        curr_gripper = curr_gripper[..., :7]
+
+        # gt_trajectory is expected to be in the quaternion format
+        if run_inference:
+            return self.compute_trajectory(
+                trajectory_mask,
+                rgb_obs,
+                pcd_obs,
+                instruction,
+                curr_gripper
+            )
+        # Normalize all pos
+        gt_trajectory = gt_trajectory.clone()
+        pcd_obs = pcd_obs.clone()
+        curr_gripper = curr_gripper.clone()
+        gt_trajectory[:, :, :3] = self.normalize_pos(gt_trajectory[:, :, :3])
+        pcd_obs = torch.permute(self.normalize_pos(
+            torch.permute(pcd_obs, [0, 1, 3, 4, 2])
+        ), [0, 1, 4, 2, 3])
+        curr_gripper[..., :3] = self.normalize_pos(curr_gripper[..., :3])
+
+        # Convert rotation parametrization
+        gt_trajectory, _ = self.convert_rot(gt_trajectory)
+        curr_gripper, _ = self.convert_rot(curr_gripper)
+
+        # Prepare inputs
+        context_feats, context, instr_feats, \
+            adaln_gripper_feats, \
+            fps_feats, fps_pos \
+                  = self.encode_inputs(
+            rgb_obs, pcd_obs, instruction, curr_gripper
+        )
+
+        obs = {
+            'pcd': context,
+            'current_gripper': curr_gripper,
+            'pcd_features': context_feats,
+            'instruction': instr_feats
+        }
+
+        #print shapes
+        print("context_feats", context_feats.shape)
+        print("context", context.shape)
+        print("instr_feats", instr_feats.shape)
+        print("adaln_gripper_feats", adaln_gripper_feats.shape)
+        print("curr_gripper", curr_gripper.shape)
+
+        # Prepare inputs
+        batch_size = pcd_obs.shape[0]
+        device, dtype = pcd_obs.device, pcd_obs.dtype
+        act_vector = self.flow._pose_to_vector(gt_trajectory[...,:3, -1], gt_trajectory[...,:3, :3])
+
+        # 2. Compute Flow Matching Variables
+        a1 = act_vector
+        a0 = self.flow.generate_random_initial_pose(batch_size)
+        time = torch.randint(0, self.flow.num_steps, (batch_size,)).to(device=device, dtype=dtype)
+
+        at = self.flow.flow_at_t(a0, a1, time)
+        target = self.flow.vector_field_at_t(a0, a1, at, time)
+
+        ## 3. Set Context
+        self.model.set_context(*self.model.encode_obs(obs))
+
+        # Predict the noise residual
+        at_pose = self.vec_to_pose(at)
+        input_data = {'act': at_pose, 'time': time}
+        d_act, openess = self.model.forward_act(input_data)
+
+        # Compute loss
+        loss = (
+                30 * F.l1_loss(d_act[...,:3], target[...,:3], reduction='mean')
+                + 10 * F.l1_loss(d_act[..., 3:6], target[..., 3:6], reduction='mean')
+        )
+        if torch.numel(gt_openess) > 0:
+            loss += F.binary_cross_entropy(openess, gt_openess)
+        return loss
