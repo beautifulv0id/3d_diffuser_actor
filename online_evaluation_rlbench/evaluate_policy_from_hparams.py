@@ -9,6 +9,8 @@ import torch
 import numpy as np
 import tap
 
+import json
+
 from diffuser_actor.keypose_optimization.act3d import Act3D
 from diffuser_actor.trajectory_optimization.diffuser_actor import DiffuserActor
 from action_flow.se3_flow_matching import SE3FlowMatching
@@ -45,36 +47,8 @@ class Arguments(tap.Tap):
     gripper_loc_bounds_buffer: float = 0.04
     single_task_gripper_loc_bounds: int = 0
     predict_trajectory: int = 1
-
-    # Act3D model parameters
-    num_query_cross_attn_layers: int = 2
-    num_ghost_point_cross_attn_layers: int = 2
-    num_ghost_points: int = 10000
-    num_ghost_points_val: int = 10000
-    weight_tying: int = 1
-    gp_emb_tying: int = 1
-    num_sampling_level: int = 3
-    fine_sampling_ball_diameter: float = 0.16
-    regress_position_offset: int = 0
-
-    # 3D Diffuser Actor model parameters
-    diffusion_timesteps: int = 100
-    num_history: int = 3
-    fps_subsampling_factor: int = 5
-    lang_enhanced: int = 0
-    dense_interpolation: int = 1
-    interpolation_length: int = 2
-    relative_action: int = 0
-
-    # Shared model parameters
+    hyper_params_file: Path = Path("hparams.json")
     action_dim: int = 8
-    backbone: str = "clip"  # one of "resnet", "clip"
-    embedding_dim: int = 120
-    num_vis_ins_attn_layers: int = 2
-    use_instruction: int = 1
-    rotation_parametrization: str = '6D'
-    quaternion_format: str = 'xyzw'
-
 
 def load_models(args):
     device = torch.device(args.device)
@@ -133,6 +107,18 @@ def load_models(args):
             use_instruction=bool(args.use_instruction)
         ).to(device)
     elif args.test_model == "pointattn":
+
+        print("model args:")
+        print('backbone:', args.backbone)
+        print('image_size:', tuple(int(x) for x in args.image_size.split(",")))
+        print('embedding_dim:', args.embedding_dim)
+        print('fps_subsampling_factor:', args.fps_subsampling_factor)
+        print('gripper_loc_bounds:', gripper_loc_bounds)
+        print('quaternion_format:', args.quaternion_format)
+        print('diffusion_timesteps:', args.diffusion_timesteps)
+        print('nhist:', args.num_history)
+        print('relative:', bool(args.relative_action))
+
         model = SE3FlowMatching(
             backbone=args.backbone,
             image_size=tuple(int(x) for x in args.image_size.split(",")),
@@ -170,10 +156,19 @@ def load_models(args):
 
     return model
 
+def load_hparams(file):
+    with open(file, "r") as f:
+        hparams = json.load(f)
+    hparams = {k: v for k, v in hparams.items() if not isinstance(v, dict)}
+    return hparams
 
 if __name__ == "__main__":
     # Arguments
     args = Arguments().parse_args()
+    hparams = load_hparams(args.hyper_params_file)
+    for k, v in hparams.items():
+        if not hasattr(args, k):
+            setattr(args, k, v)
     args.cameras = tuple(x for y in args.cameras for x in y.split(","))
     print("Arguments:")
     print(args)
@@ -209,8 +204,7 @@ if __name__ == "__main__":
         instructions=instruction,
         apply_cameras=args.cameras,
         action_dim=args.action_dim,
-        predict_trajectory=bool(args.predict_trajectory),
-        model = args.test_model
+        predict_trajectory=bool(args.predict_trajectory)
     )
     max_eps_dict = load_episodes()["max_episode_length"]
     task_success_rates = {}

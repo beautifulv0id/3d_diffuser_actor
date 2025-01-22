@@ -66,12 +66,13 @@ def load_episodes() -> Dict[str, Any]:
 
 class Mover:
 
-    def __init__(self, task, disabled=False, max_tries=1):
+    def __init__(self, task, disabled=False, max_tries=1, verbose=False):
         self._task = task
         self._last_action = None
         self._step_id = 0
         self._max_tries = max_tries
         self._disabled = disabled
+        self._verbose = verbose
 
     def __call__(self, action, collision_checking=False):
         if self._disabled:
@@ -103,9 +104,10 @@ class Mover:
             if all(criteria) or reward == 1:
                 break
 
-            print(
-                f"Too far away (pos: {dist_pos:.3f}, rot: {dist_rot:.3f}, step: {self._step_id})... Retrying..."
-            )
+            if self._verbose:
+                print(
+                    f"Too far away (pos: {dist_pos:.3f}, rot: {dist_rot:.3f}, step: {self._step_id})... Retrying..."
+                )
 
         # we execute the gripper action after re-tries
         action = target
@@ -137,7 +139,9 @@ class Actioner:
         instructions=None,
         apply_cameras=("left_shoulder", "right_shoulder", "wrist"),
         action_dim=7,
-        predict_trajectory=True
+        predict_trajectory=True,
+        model='pointattn',
+        verbose=False
     ):
         self._policy = policy
         self._instructions = instructions
@@ -150,6 +154,9 @@ class Actioner:
         self._task_str = None
 
         self._policy.eval()
+
+        self._model = model
+        self._verbose = verbose
 
     def load_episode(self, task_str, variation):
         self._task_str = task_str
@@ -213,22 +220,33 @@ class Actioner:
 
         # Predict trajectory
         if self._predict_trajectory:
-            print('Predict Trajectory')
+            if self._verbose:
+                print('Predict Trajectory')
             fake_traj = torch.full(
                 [1, interpolation_length - 1, gripper.shape[-1]], 0
             ).to(rgbs.device)
             traj_mask = torch.full(
                 [1, interpolation_length - 1], False
             ).to(rgbs.device)
-            output["trajectory"] = self._policy(
-                fake_traj,
-                traj_mask,
-                rgbs[:, -1],
-                pcds[:, -1],
-                self._instr,
-                gripper[..., :7],
-                run_inference=True
-            )
+            if 'pointattn' in self._model:
+                output["trajectory"] = self._policy(
+                    fake_traj,
+                    rgbs[:, -1],
+                    pcds[:, -1],
+                    self._instr,
+                    gripper[..., :7],
+                    run_inference=True
+                )
+            else:
+                output["trajectory"] = self._policy(
+                    fake_traj,
+                    traj_mask,
+                    rgbs[:, -1],
+                    pcds[:, -1],
+                    self._instr,
+                    gripper[..., :7],
+                    run_inference=True
+                )
         else:
             print('Predict Keypose')
             pred = self._policy(
@@ -460,10 +478,13 @@ class RLBenchEnv:
 
         self.env.shutdown()
 
-        var_success_rates["mean"] = (
-            sum(var_success_rates.values()) /
-            sum(var_num_valid_demos.values())
-        )
+        if sum(var_num_valid_demos.values()) == 0:
+            var_success_rates["mean"] = 0
+        else:
+            var_success_rates["mean"] = (
+                sum(var_success_rates.values()) /
+                sum(var_num_valid_demos.values())
+            )
 
         return var_success_rates
 
@@ -495,6 +516,7 @@ class RLBenchEnv:
 
             try:
                 demo = self.get_demo(task_str, variation, episode_index=demo_id)[0]
+                print(f"Loaded demo {demo_id}")
                 num_valid_demos += 1
             except:
                 continue
@@ -512,7 +534,7 @@ class RLBenchEnv:
             reward = 0.0
             max_reward = 0.0
 
-            for step_id in range(max_steps):
+            for step_id in tqdm(range(max_steps)):
 
                 # Fetch the current observation, and predict one action
                 rgb, pcd, gripper = self.get_rgb_pcd_gripper_from_obs(obs)
@@ -556,7 +578,7 @@ class RLBenchEnv:
                         trajectory[:, -1] = trajectory[:, -1].round()
 
                         # execute
-                        for action in tqdm(trajectory):
+                        for action in trajectory:
                             #try:
                             #    collision_checking = self._collision_checking(task_str, step_id)
                             #    obs, reward, terminate, _ = move(action_np, collision_checking=collision_checking)

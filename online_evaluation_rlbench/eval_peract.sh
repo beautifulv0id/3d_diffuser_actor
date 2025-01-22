@@ -3,7 +3,10 @@ exp=3d_diffuser_actor
 tasks=(
     close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap place_cups
 )
-data_dir=./data/peract/raw/test/
+tasks=(
+    open_drawer
+)
+data_dir=~/data/peract/test/
 num_episodes=100
 gripper_loc_bounds_file=tasks/18_peract_tasks_location_bounds.json
 use_instruction=1
@@ -17,7 +20,7 @@ fps_subsampling_factor=5
 lang_enhanced=0
 relative_action=0
 seed=0
-checkpoint=train_logs/diffuser_actor_peract.pth
+checkpoint=train_logs/3d_diffuser_actor/diffuser_actor_peract.pth
 quaternion_format=wxyz  # IMPORTANT: change this to be the same as the training script IF you're not using our checkpoint
 
 num_ckpts=${#tasks[@]}
@@ -43,7 +46,7 @@ for ((i=0; i<$num_ckpts; i++)); do
     --num_episodes $num_episodes \
     --output_file eval_logs/$exp/seed$seed/${tasks[$i]}.json  \
     --use_instruction $use_instruction \
-    --instructions instructions/peract/instructions.pkl \
+    --instructions ~/data/rlbench_instructions/instructions.pkl \
     --variations {0..60} \
     --max_tries $max_tries \
     --max_steps 25 \
