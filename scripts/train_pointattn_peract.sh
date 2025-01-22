@@ -8,9 +8,9 @@ dense_interpolation=1
 interpolation_length=2
 num_history=3
 diffusion_timesteps=100
-B=1
-C=24
-ngpus=1
+B=4
+C=120
+ngpus=$(python3 scripts/helper/count_cuda_devices.py)
 quaternion_format=xyzw
 
 CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
@@ -24,13 +24,13 @@ CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --train_iters 600000 \
     --embedding_dim $C \
     --diffusion_timesteps $diffusion_timesteps \
-    --val_freq 50 \
+    --val_freq 500 \
     --dense_interpolation $dense_interpolation \
     --interpolation_length $interpolation_length \
     --exp_log_dir $main_dir \
     --batch_size $B \
     --batch_size_val 14 \
-    --cache_size 600 \
+    --cache_size 10000 \
     --cache_size_val 0 \
     --keypose_only 1 \
     --variations {0..199} \

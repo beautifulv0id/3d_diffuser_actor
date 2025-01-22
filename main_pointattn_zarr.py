@@ -236,7 +236,6 @@ class TrainTester(BaseTrainTester):
                 viz = generate_visualizations(
                     action,
                     sample["trajectory"].to(device),
-                    sample["trajectory_mask"].to(device)
                 )
                 self.writer.add_image(viz_key, viz, step_id)
 
@@ -272,7 +271,7 @@ class TrajectoryCriterion:
         return pred
 
     @staticmethod
-    def compute_metrics(pred, gt, mask):
+    def compute_metrics(pred, gt):
         # pred/gt are (B, L, 7), mask (B, L)
         pos_l2 = ((pred[..., :3] - gt[..., :3]) ** 2).sum(-1).sqrt()
         # symmetric quaternion eval
@@ -331,24 +330,23 @@ def fig_to_numpy(fig, dpi=60):
     return img
 
 
-def generate_visualizations(pred, gt, mask, box_size=0.3):
+def generate_visualizations(pred, gt, box_size=0.3):
     batch_idx = 0
     pred = pred[batch_idx].detach().cpu().numpy()
     gt = gt[batch_idx].detach().cpu().numpy()
-    mask = mask[batch_idx].detach().cpu().numpy()
 
     fig = plt.figure(figsize=(10, 10))
     ax = plt.axes(projection='3d')
     ax.scatter3D(
-        pred[~mask][:, 0], pred[~mask][:, 1], pred[~mask][:, 2],
+        pred[:, 0], pred[:, 1], pred[:, 2],
         color='red', label='pred'
     )
     ax.scatter3D(
-        gt[~mask][:, 0], gt[~mask][:, 1], gt[~mask][:, 2],
+        gt[:, 0], gt[:, 1], gt[:, 2],
         color='blue', label='gt'
     )
 
-    center = gt[~mask].mean(0)
+    center = gt.mean(0)
     ax.set_xlim(center[0] - box_size, center[0] + box_size)
     ax.set_ylim(center[1] - box_size, center[1] + box_size)
     ax.set_zlim(center[2] - box_size, center[2] + box_size)

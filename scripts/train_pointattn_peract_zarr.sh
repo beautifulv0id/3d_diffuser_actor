@@ -1,6 +1,6 @@
 main_dir=Actor_18Peract_100Demo_multitask
 
-dataset=~/data/diffuser_actor.zarr
+dataset=/data/diffuser_actor.zarr
 
 lr=1e-4
 dense_interpolation=1
@@ -9,14 +9,14 @@ num_history=3
 diffusion_timesteps=100
 B=12
 C=192
-ngpus=1
+ngpus=$(python3 scripts/helper/count_cuda_devices.py)
 quaternion_format=xyzw
 
 CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     main_pointattn_zarr.py \
     --tasks place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap \
     --dataset $dataset \
-    --instructions ~/data/rlbench_instructions/instructions.pkl \
+    --instructions /data/rlbench_instructions/instructions.pkl \
     --gripper_loc_bounds tasks/18_peract_tasks_location_bounds.json \
     --num_workers 1 \
     --train_iters 600000 \
