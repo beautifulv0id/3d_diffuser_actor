@@ -141,7 +141,7 @@ class Encoder(nn.Module):
         )
 
         # Rotary positional encoding
-        gripper_pos = self.relative_pe_layer(gripper[..., :3, -1])
+        gripper_pos = self.relative_pe_layer(gripper[..., :3])
         context_pos = self.relative_pe_layer(context)
 
         gripper_feats = einops.rearrange(
