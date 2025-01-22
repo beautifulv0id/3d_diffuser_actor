@@ -66,8 +66,12 @@ class Resize:
         # Sample resize scale from continuous range
         sc = np.random.uniform(*self.scales)
 
-        n, c, raw_h, raw_w = kwargs[keys[0]].shape
-        kwargs = {n: arg for n, arg in kwargs.items()}
+        dim = kwargs[keys[0]].dim()
+        if dim == 5:
+            t, n, c, raw_h, raw_w = kwargs[keys[0]].shape
+            kwargs = {n: arg.flatten(0,1) for n, arg in kwargs.items()}
+        else: 
+            n, c, raw_h, raw_w = kwargs[keys[0]].shape
         resized_size = [int(raw_h * sc), int(raw_w * sc)]
 
         # Resize
@@ -101,6 +105,12 @@ class Resize:
         kwargs = {
             n: transforms_f.crop(arg, i, j, h, w) for n, arg in kwargs.items()
         }
+
+        if dim == 5:
+            kwargs = {
+                n: einops.rearrange(arg, "(t n) c h w -> t n c h w", t=t)
+                for n, arg in kwargs.items()
+            }
 
         return kwargs
 
@@ -136,4 +146,5 @@ class TrajectoryInterpolator:
         resampled = torch.tensor(resampled)
         if trajectory.shape[1] == 8:
             resampled[:, 3:7] = normalise_quat(resampled[:, 3:7])
+
         return resampled

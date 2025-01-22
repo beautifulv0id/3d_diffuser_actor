@@ -45,6 +45,7 @@ class Arguments(tap.Tap):
     valset: Path
     dense_interpolation: int = 0
     interpolation_length: int = 100
+    name: str = 'train_point_attention_self_attn'
 
     # Logging to base_log_dir/exp_log_dir/run_log_dir
     base_log_dir: Path = Path(__file__).parent / "train_logs"
