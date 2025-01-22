@@ -16,7 +16,7 @@ from torch.nn import functional as F
 
 from datasets.dataset_engine import RLBenchDataset
 from engine import BaseTrainTester
-from action_flow.se3_flow_matching import SE3FlowMatching
+from action_flow.se3_flow_matching_self_attn import SE3FlowMatchingSelfAttn
 
 from utils.common_utils import (
     load_instructions, count_parameters, get_gripper_loc_bounds
@@ -141,7 +141,7 @@ class TrainTester(BaseTrainTester):
     def get_model(self):
         """Initialize the model."""
         # Initialize model with arguments
-        _model = SE3FlowMatching(
+        _model = SE3FlowMatchingSelfAttn(
             backbone=self.args.backbone,
             image_size=tuple(int(x) for x in self.args.image_size.split(",")),
             embedding_dim=self.args.embedding_dim,

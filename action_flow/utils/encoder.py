@@ -13,7 +13,7 @@ from torch.nn import functional as F
 
     
 class SE3GraspPointCloudSuperEncoder(ModuleAttrMixin):
-    def __init__(self, dim_features=128, depth=3, nheads=4, n_steps_inf=50, subsampling_factor=5, nhist=3, dim_pcd_features=64, num_vis_ins_attn_layers=2):
+    def __init__(self, dim_features=128, depth=3, nheads=4, n_steps_inf=50, fps_subsampling_factor=5, nhist=3, dim_pcd_features=64, num_vis_ins_attn_layers=2):
         super(SE3GraspPointCloudSuperEncoder, self).__init__()
 
         ## Learnable observation features (Data in Acronym is purely geometrical, no semantics involved)
@@ -23,7 +23,7 @@ class SE3GraspPointCloudSuperEncoder(ModuleAttrMixin):
         self.action_features = nn.Parameter(torch.randn(1, dim_features))
 
         ## Pointcloud Encoder ##
-        self.obs_encoder = SuperPointEncoder(input_dim=dim_pcd_features, output_dim=dim_features, subsampling_factor=subsampling_factor,
+        self.obs_encoder = SuperPointEncoder(input_dim=dim_pcd_features, output_dim=dim_features, fps_subsampling_factor=fps_subsampling_factor,
                                              nheads=nheads, num_layers=depth)
         
         ## Gripper History Encoder ##
@@ -164,8 +164,8 @@ class SE3GraspPointCloudSuperEncoder(ModuleAttrMixin):
         return self.act_merger(act_time_f)
     
 class SE3GraspFPSEncoder(SE3GraspPointCloudSuperEncoder):
-    def __init__(self, dim_features=128, depth=3, nheads=4, n_steps_inf=50, n_points_out=100, nhist=3, dim_pcd_features=64):
-        super(SE3GraspFPSEncoder, self).__init__(dim_features, depth, nheads, n_steps_inf, n_points_out, nhist, dim_pcd_features)
+    def __init__(self, dim_features=128, depth=3, nheads=4, n_steps_inf=50, fps_subsampling_factor=5, nhist=3, dim_pcd_features=64):
+        super(SE3GraspFPSEncoder, self).__init__(dim_features, depth, nheads, n_steps_inf, fps_subsampling_factor, nhist, dim_pcd_features)
         input_dim = dim_pcd_features
         output_dim = dim_features
         self.linear = nn.Linear(input_dim, output_dim)
