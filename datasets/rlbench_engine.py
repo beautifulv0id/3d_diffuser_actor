@@ -6,7 +6,7 @@ from collections import defaultdict, Counter
 from .utils import Resize, dict_apply
 from pathlib import Path
 import random
-import time 
+from time import time
 
 def create_sample_indices(split, taskvar, n_episodes, n_obs):
     indices = []
