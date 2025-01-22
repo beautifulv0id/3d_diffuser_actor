@@ -69,7 +69,6 @@ class Arguments(tap.Tap):
     # Model
     backbone: str = "clip"  # one of "resnet", "clip"
     embedding_dim: int = 120
-    num_vis_ins_attn_layers: int = 2
     use_instruction: int = 0
     rotation_parametrization: str = 'quat'
     quaternion_format: str = 'wxyz'
@@ -149,7 +148,6 @@ class TrainTester(BaseTrainTester):
             backbone=self.args.backbone,
             image_size=tuple(int(x) for x in self.args.image_size.split(",")),
             embedding_dim=self.args.embedding_dim,
-            num_vis_ins_attn_layers=self.args.num_vis_ins_attn_layers,
             use_instruction=bool(self.args.use_instruction),
             fps_subsampling_factor=self.args.fps_subsampling_factor,
             gripper_loc_bounds=self.args.gripper_loc_bounds,
@@ -176,10 +174,8 @@ class TrainTester(BaseTrainTester):
 
         if self.args.keypose_only:
             sample["trajectory"] = sample["trajectory"][:, [-1]]
-            sample["trajectory_mask"] = sample["trajectory_mask"][:, [-1]]
         else:
             sample["trajectory"] = sample["trajectory"][:, 1:]
-            sample["trajectory_mask"] = sample["trajectory_mask"][:, 1:]
 
         # Forward pass
         curr_gripper = (
@@ -188,7 +184,6 @@ class TrainTester(BaseTrainTester):
         )
         out = model(
             sample["trajectory"],
-            sample["trajectory_mask"],
             sample["rgbs"],
             sample["pcds"],
             sample["instr"],
@@ -240,7 +235,6 @@ class TrainTester(BaseTrainTester):
             )
             action = model(
                 sample["trajectory"].to(device),
-                sample["trajectory_mask"].to(device),
                 sample["rgbs"].to(device),
                 sample["pcds"].to(device),
                 sample["instr"].to(device),

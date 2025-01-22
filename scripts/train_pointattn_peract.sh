@@ -8,7 +8,7 @@ dense_interpolation=1
 interpolation_length=2
 num_history=3
 diffusion_timesteps=100
-B=1
+B=8
 C=120
 ngpus=1
 quaternion_format=xyzw
@@ -26,7 +26,7 @@ CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --use_instruction 1 \
     --rotation_parametrization 6D \
     --diffusion_timesteps $diffusion_timesteps \
-    --val_freq 4000 \
+    --val_freq 50 \
     --dense_interpolation $dense_interpolation \
     --interpolation_length $interpolation_length \
     --exp_log_dir $main_dir \

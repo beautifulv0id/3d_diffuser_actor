@@ -11,7 +11,7 @@ import einops
 
 from torch.nn import functional as F
 
-
+    
 class SE3GraspPointCloudSuperEncoder(ModuleAttrMixin):
     def __init__(self, dim_features=128, depth=3, nheads=4, n_steps_inf=50, subsampling_factor=5, nhist=3, dim_pcd_features=64, num_vis_ins_attn_layers=2):
         super(SE3GraspPointCloudSuperEncoder, self).__init__()
@@ -136,8 +136,7 @@ class SE3GraspPointCloudSuperEncoder(ModuleAttrMixin):
         obs_points['centers'] = torch.cat((obs_points["centers"], current_gripper[:,:,:3,-1]), dim=1)
 
         if instruction is not None:
-            # instr_features = self.encode_instruction(instruction)
-            instr_features = instruction
+            instr_features = self.encode_instruction(instruction)
             obs_features = self.vision_language_attention(obs_features, instr_features)
         else:
             instr_features = None
@@ -187,12 +186,12 @@ class FeaturePCDEncoder(ModuleAttrMixin):
     def __init__(self,
                  backbone="clip",
                  image_size=(256, 256),
-                 feature_res="res2"):
+                 embedding_dim=60):
         super().__init__()
 
-        assert feature_res in ["res1", "res2", "res3"]
         assert image_size in [(128, 128), (256, 256)]
 
+        
         # 3D relative positional embeddings
         # Frozen backbone
         if backbone == "resnet50":
@@ -210,19 +209,11 @@ class FeaturePCDEncoder(ModuleAttrMixin):
         elif image_size == (256, 256):
             self.feature_res = "res3"
             self.out_dim = 512
-        self.obs_features = nn.Parameter(torch.randn(1, self.out_dim))
+
+        self.to_out = nn.Linear(self.out_dim, embedding_dim)
         
     def forward(self, rgb, pcd):
-        if rgb is not None:
-            return self.get_feature_pcd(rgb, pcd)
-        else:
-            return self.get_lowdim_feature_pcd(pcd)
-    
-    def get_lowdim_feature_pcd(self, pcd):
-        batch, npts = pcd.shape[0:2]
-        feats = self.obs_features.unsqueeze(0).expand(batch, npts, -1)
-        return feats, pcd
-
+        return self.get_feature_pcd(rgb, pcd)
 
     def get_feature_pcd(self, rgb, pcd):
         """
@@ -265,29 +256,7 @@ class FeaturePCDEncoder(ModuleAttrMixin):
             "(bt ncam) c h w -> bt (ncam h w) c", ncam=num_cameras
         )
 
+        # Project to embedding dim
+        rgb_features = self.to_out(rgb_features)
+
         return rgb_features, pcd
-    
-if __name__=='__main__':
-    # Example usage
-    batch = 30
-    n_tokens = 3000
-    emb_dim = 512
-
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    x = {
-        'obs': {
-            'pcd': torch.randn((batch, n_tokens, 3)).to(device),
-            'pcd_features': torch.randn((batch, n_tokens, emb_dim)).to(device),
-            'current_gripper': torch.randn((batch, 1, 4, 4)).to(device)
-        },
-        'act': torch.randn((batch, 1, 4, 4)).to(device),
-        'time': torch.randn((batch)).to(device)
-    }
-
-    encoder = SE3GraspPointCloudSuperEncoder(dim_features=emb_dim, depth=3, nheads=4, n_steps_inf=50, n_points_out=20, nhist=3).to(device)
-    obs_points, obs_f, act_points, act_f = encoder(x)
-    print("Obs Points:", obs_points['centers'].shape, obs_points['vectors'].shape)
-    print("Obs Features:", obs_f.shape)
-    print("Act Points:", act_points['centers'].shape, act_points['vectors'].shape)
-    print("Act Features:", act_f.shape)

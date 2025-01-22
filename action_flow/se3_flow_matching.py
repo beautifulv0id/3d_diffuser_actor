@@ -10,7 +10,7 @@ from diffuser_actor.utils.utils import (
     quaternion_to_matrix
 )
 from action_flow.utils.geometry import se3_from_rot_pos
-from action_flow.utils.encoder import SE3GraspPointCloudSuperEncoder
+from action_flow.utils.encoder import SE3GraspPointCloudSuperEncoder, FeaturePCDEncoder
 from action_flow.utils.se3_grasp_vector_field import SE3GraspVectorField
 
 from geo3dattn.policy.se3_flowmatching.common.se3_flowmatching import RectifiedLinearFlow
@@ -22,7 +22,6 @@ class SE3FlowMatching(nn.Module):
                  backbone="clip",
                  image_size=(256, 256),
                  embedding_dim=60,
-                 num_vis_ins_attn_layers=2,
                  use_instruction=False,
                  fps_subsampling_factor=5,
                  gripper_loc_bounds=None,
@@ -38,15 +37,11 @@ class SE3FlowMatching(nn.Module):
         self._quaternion_format = quaternion_format
         self._relative = relative
         self.use_instruction = use_instruction
-        self.encoder = Encoder(
+        self.feature_pcd_encoder = FeaturePCDEncoder(
             backbone=backbone,
             image_size=image_size,
-            embedding_dim=embedding_dim,
-            num_sampling_level=1,
-            nhist=nhist,
-            num_vis_ins_attn_layers=num_vis_ins_attn_layers,
-            fps_subsampling_factor=fps_subsampling_factor
-        )
+            embedding_dim=embedding_dim
+            )
         encoder = SE3GraspPointCloudSuperEncoder(
             dim_features=embedding_dim,
             depth=6,
@@ -93,50 +88,6 @@ class SE3FlowMatching(nn.Module):
         return (pos + 1.0) / 2.0 * (pos_max - pos_min) + pos_min
 
 
-    def encode_inputs(self, visible_rgb, visible_pcd, instruction,
-                      curr_gripper):
-        # Compute visual features/positional embeddings at different scales
-        rgb_feats_pyramid, pcd_pyramid = self.encoder.encode_images(
-            visible_rgb, visible_pcd
-        )
-        # Keep only low-res scale
-        context_feats = einops.rearrange(
-            rgb_feats_pyramid[0],
-            "b ncam c h w -> b (ncam h w) c"
-        )
-        context = pcd_pyramid[0]
-
-        # Encode instruction (B, 53, F)
-        instr_feats = None
-        if self.use_instruction:
-            instr_feats, _ = self.encoder.encode_instruction(instruction)
-
-        # Cross-attention vision to language
-        if self.use_instruction:
-            # Attention from vision to language
-            context_feats = self.encoder.vision_language_attention(
-                context_feats, instr_feats
-            )
-
-        # Encode gripper history (B, nhist, F)
-        adaln_gripper_feats, _ = self.encoder.encode_curr_gripper(
-            curr_gripper, context_feats, context
-        )
-
-        # FPS on visual features (N, B, F) and (B, N, F, 2)
-        fps_feats, fps_pos = self.encoder.run_fps(
-            context_feats.transpose(0, 1),
-            self.encoder.relative_pe_layer(context)
-        )
-        fps_feats = fps_feats.transpose(0, 1)
-        return (
-            context_feats, context,  # contextualized visual features
-            instr_feats,  # language features
-            adaln_gripper_feats,  # gripper history features
-            fps_feats, fps_pos  # sampled visual features
-        )
-
-
     def conditional_sample(self, obs):
         B = obs["pcd"].shape[0]
         self.model.set_context(*self.model.encode_obs(obs))
@@ -155,38 +106,7 @@ class SE3FlowMatching(nn.Module):
 
         return trajectory, gripper_open
 
-    def compute_trajectory(
-        self,
-        trajectory_mask,
-        rgb_obs,
-        pcd_obs,
-        instruction,
-        curr_gripper
-    ):
-        # Normalize all pos
-        pcd_obs = pcd_obs.clone()
-        curr_gripper = curr_gripper.clone()
-        pcd_obs = torch.permute(self.normalize_pos(
-            torch.permute(pcd_obs, [0, 1, 3, 4, 2])
-        ), [0, 1, 4, 2, 3])
-        curr_gripper[..., :3] = self.normalize_pos(curr_gripper[..., :3])
-        curr_gripper, _ = self.convert_rot(curr_gripper)
-
-        # Prepare inputs
-        context_feats, context, instr_feats, \
-            adaln_gripper_feats, \
-            fps_feats, fps_pos \
-                  = self.encode_inputs(
-            rgb_obs, pcd_obs, instruction, curr_gripper
-        )
-
-        obs = {
-            'pcd': context,
-            'current_gripper': curr_gripper,
-            'pcd_features': context_feats,
-            'instruction': instr_feats
-        }        
-
+    def compute_trajectory(self, obs):
         # Sample
         trajectory, gripper_open = self.conditional_sample(obs)
 
@@ -196,7 +116,6 @@ class SE3FlowMatching(nn.Module):
         trajectory[:, :, :3] = self.unnormalize_pos(trajectory[:, :, :3])
 
         return trajectory
-
 
     def convert_rot(self, signal):
         signal = signal.clone()
@@ -233,7 +152,6 @@ class SE3FlowMatching(nn.Module):
     def forward(
         self,
         gt_trajectory,
-        trajectory_mask,
         rgb_obs,
         pcd_obs,
         instruction,
@@ -243,7 +161,6 @@ class SE3FlowMatching(nn.Module):
         """
         Arguments:
             gt_trajectory: (B, trajectory_length, 3+4+X)
-            trajectory_mask: (B, trajectory_length)
             timestep: (B, 1)
             rgb_obs: (B, num_cameras, 3, H, W) in [0, 1]
             pcd_obs: (B, num_cameras, 3, H, W) in world coordinates
@@ -255,6 +172,7 @@ class SE3FlowMatching(nn.Module):
             is ALWAYS expressed as a quaternion form.
             The model converts it to 6D internally if needed.
         """
+        feature_obs, pcd_obs = self.feature_pcd_encoder(rgb_obs, pcd_obs)
         if self._relative:
             pcd_obs, curr_gripper = self.convert2rel(pcd_obs, curr_gripper)
         if gt_trajectory is not None:
@@ -262,50 +180,30 @@ class SE3FlowMatching(nn.Module):
             gt_trajectory = gt_trajectory[..., :7]
         curr_gripper = curr_gripper[..., :7]
 
-        # gt_trajectory is expected to be in the quaternion format
-        if run_inference:
-            return self.compute_trajectory(
-                trajectory_mask,
-                rgb_obs,
-                pcd_obs,
-                instruction,
-                curr_gripper
-            )
         # Normalize all pos
-        gt_trajectory = gt_trajectory.clone()
         pcd_obs = pcd_obs.clone()
         curr_gripper = curr_gripper.clone()
-        gt_trajectory[:, :, :3] = self.normalize_pos(gt_trajectory[:, :, :3])
-        pcd_obs = torch.permute(self.normalize_pos(
-            torch.permute(pcd_obs, [0, 1, 3, 4, 2])
-        ), [0, 1, 4, 2, 3])
+        pcd_obs = self.normalize_pos(pcd_obs[..., :3])
         curr_gripper[..., :3] = self.normalize_pos(curr_gripper[..., :3])
+        if gt_trajectory is not None:
+            gt_trajectory = gt_trajectory.clone()
+            gt_trajectory[:, :, :3] = self.normalize_pos(gt_trajectory[:, :, :3])
 
         # Convert rotation parametrization
-        gt_trajectory, _ = self.convert_rot(gt_trajectory)
         curr_gripper, _ = self.convert_rot(curr_gripper)
-
-        # Prepare inputs
-        context_feats, context, instr_feats, \
-            adaln_gripper_feats, \
-            fps_feats, fps_pos \
-                  = self.encode_inputs(
-            rgb_obs, pcd_obs, instruction, curr_gripper
-        )
+        if gt_trajectory is not None:
+            gt_trajectory, _ = self.convert_rot(gt_trajectory)
 
         obs = {
-            'pcd': context,
+            'pcd': pcd_obs,
             'current_gripper': curr_gripper,
-            'pcd_features': context_feats,
-            'instruction': instr_feats
-        }
+            'pcd_features': feature_obs,
+            'instruction': instruction
+        }        
 
-        #print shapes
-        print("context_feats", context_feats.shape)
-        print("context", context.shape)
-        print("instr_feats", instr_feats.shape)
-        print("adaln_gripper_feats", adaln_gripper_feats.shape)
-        print("curr_gripper", curr_gripper.shape)
+        # gt_trajectory is expected to be in the quaternion format
+        if run_inference:
+            return self.compute_trajectory(obs)
 
         # Prepare inputs
         batch_size = pcd_obs.shape[0]
