@@ -21,12 +21,20 @@ def main(root_dir, task):
                 'rb'
             )
         )
-        os.makedirs(f'{root_dir}/{task}/variation{variation}/episodes', exist_ok=True)
 
         if variation not in seen_variations.keys():
             seen_variations[variation] = [num]
+            dir_path = f'{root_dir}/{task}/variation{variation}'
+            if os.path.exists(dir_path) and os.path.isdir(dir_path):
+                try:
+                    call(["rm", "-rf", dir_path])  # Linux/Mac
+                    print(f"Directory '{dir_path}' has been deleted.")
+                except Exception as e:
+                    print(f"Error deleting directory: {e}")
         else:
             seen_variations[variation].append(num)
+
+        os.makedirs(f'{root_dir}/{task}/variation{variation}/episodes', exist_ok=True)
 
         if os.path.isfile(f'{root_dir}/{task}/variation{variation}/variation_descriptions.pkl'):
             data1 = pickle.load(open(f'{root_dir}/{task}/all_variations/episodes/episode{num}/variation_descriptions.pkl', 'rb'))

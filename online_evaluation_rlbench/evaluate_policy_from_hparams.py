@@ -107,18 +107,6 @@ def load_models(args):
             use_instruction=bool(args.use_instruction)
         ).to(device)
     elif args.test_model == "pointattn":
-
-        print("model args:")
-        print('backbone:', args.backbone)
-        print('image_size:', tuple(int(x) for x in args.image_size.split(",")))
-        print('embedding_dim:', args.embedding_dim)
-        print('fps_subsampling_factor:', args.fps_subsampling_factor)
-        print('gripper_loc_bounds:', gripper_loc_bounds)
-        print('quaternion_format:', args.quaternion_format)
-        print('diffusion_timesteps:', args.diffusion_timesteps)
-        print('nhist:', args.num_history)
-        print('relative:', bool(args.relative_action))
-
         model = SE3FlowMatching(
             backbone=args.backbone,
             image_size=tuple(int(x) for x in args.image_size.split(",")),
@@ -204,7 +192,8 @@ if __name__ == "__main__":
         instructions=instruction,
         apply_cameras=args.cameras,
         action_dim=args.action_dim,
-        predict_trajectory=bool(args.predict_trajectory)
+        predict_trajectory=bool(args.predict_trajectory),
+        test_model=args.test_model
     )
     max_eps_dict = load_episodes()["max_episode_length"]
     task_success_rates = {}
