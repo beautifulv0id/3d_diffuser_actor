@@ -1,4 +1,4 @@
-config_name=PointAttn_18Peract_100Demo_multitask
+config_name=Actor_18Peract_100Demo_multitask
 main_dir=$(./scripts/get_log_path.sh $config_name)
 
 dataset=~/data/Peract_packaged/train
@@ -9,13 +9,13 @@ dense_interpolation=1
 interpolation_length=2
 num_history=3
 diffusion_timesteps=100
-B=3
-C=120
+B=1
+C=32
 ngpus=$(python3 scripts/helper/count_cuda_devices.py)
 quaternion_format=xyzw
 
 CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
-    main_pointattn.py \
+    main_pointattn_super_point_encoder.py \
     --tasks place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap \
     --dataset $dataset \
     --valset $valset \
@@ -25,7 +25,7 @@ CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --train_iters 600000 \
     --embedding_dim $C \
     --diffusion_timesteps $diffusion_timesteps \
-    --val_freq 4000 \
+    --val_freq 50 \
     --dense_interpolation $dense_interpolation \
     --interpolation_length $interpolation_length \
     --exp_log_dir $main_dir \

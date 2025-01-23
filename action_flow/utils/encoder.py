@@ -87,9 +87,9 @@ class SuperPointEncoder(nn.Module):
         return out_query_f, {'query':{'centers': query_c, 'vectors': query_v}}
 
 
-class SE3GraspPointCloudSuperEncoder(ModuleAttrMixin):
-    def __init__(self, dim_features=128, depth=3, nheads=4, n_steps_inf=50, fps_subsampling_factor=5, nhist=3, dim_pcd_features=64, num_vis_ins_attn_layers=2):
-        super(SE3GraspPointCloudSuperEncoder, self).__init__()
+class SE3GraspPointCloudEncoder(ModuleAttrMixin):
+    def __init__(self, dim_features=128, gripper_depth=3, nheads=4, n_steps_inf=50, nhist=3, num_vis_ins_attn_layers=2):
+        super(SE3GraspPointCloudEncoder, self).__init__()
 
         ## Learnable observation features (Data in Acronym is purely geometrical, no semantics involved)
         self.gripper_features = nn.Parameter(torch.randn(nhist,dim_features))
@@ -97,12 +97,8 @@ class SE3GraspPointCloudSuperEncoder(ModuleAttrMixin):
         ## Learnable action features
         self.action_features = nn.Parameter(torch.randn(1, dim_features))
 
-        ## Pointcloud Encoder ##
-        self.obs_encoder = SuperPointEncoder(input_dim=dim_pcd_features, output_dim=dim_features, fps_subsampling_factor=fps_subsampling_factor,
-                                             nheads=nheads, num_layers=depth)
-        
         ## Gripper History Encoder ##
-        self.gripper_decoder = URSATransformer(dim_features, nhead=nheads, num_layers=depth)
+        self.gripper_decoder = URSATransformer(dim_features, nhead=nheads, num_layers=gripper_depth)
 
         ## Instruction Encoder ##
         self.instruction_encoder = nn.Linear(512, dim_features)
@@ -200,9 +196,6 @@ class SE3GraspPointCloudSuperEncoder(ModuleAttrMixin):
         obs_points = {'centers': pcd, 'vectors': vectors}
 
         obs_features = pcd_features
-        if self.obs_encoder is not None:
-            obs_features, obs_geo = self.obs_encoder(tgt=obs_features, geometric_args={'query':obs_points})
-            obs_points = obs_geo['query']
         
         # add gripper features
         gripper_features = self.encode_gripper(current_gripper, obs_features, obs_points)        
@@ -237,6 +230,46 @@ class SE3GraspPointCloudSuperEncoder(ModuleAttrMixin):
     def act_combine_time(self, act_f, time_emb):
         act_time_f = torch.cat((act_f, time_emb.repeat(1, act_f.shape[1],1)), dim=-1)
         return self.act_merger(act_time_f)
+
+class SE3GraspPointCloudSuperEncoder(SE3GraspPointCloudEncoder):
+    def __init__(self, dim_features=128, gripper_depth=3, nheads=4, n_steps_inf=50, fps_subsampling_factor=5, nhist=3, dim_pcd_features=64, spe_depth=3, num_vis_ins_attn_layers=2):
+        super(SE3GraspPointCloudSuperEncoder, self).__init__(dim_features, gripper_depth, nheads, n_steps_inf, nhist, num_vis_ins_attn_layers)
+
+        ## Pointcloud Encoder ##
+        self.obs_encoder = SuperPointEncoder(input_dim=dim_pcd_features, output_dim=dim_features, fps_subsampling_factor=fps_subsampling_factor,
+                                             nheads=nheads, num_layers=spe_depth)
+
+    def encode_obs(self, obs):
+        pcd = obs['pcd']
+        pcd_features = obs['pcd_features']
+        current_gripper = obs['current_gripper']
+        instruction = obs.get('instruction', None)
+
+        batch = pcd.shape[0]
+        device = pcd.device
+
+        # encode pcd
+        vectors = torch.zeros((3,3))[None,None,:,:].repeat(batch, pcd.shape[1], 1, 1).to(device)
+        obs_points = {'centers': pcd, 'vectors': vectors}
+
+        obs_features = pcd_features
+        if self.obs_encoder is not None:
+            obs_features, obs_geo = self.obs_encoder(tgt=obs_features, geometric_args={'query':obs_points})
+            obs_points = obs_geo['query']
+        
+        # add gripper features
+        gripper_features = self.encode_gripper(current_gripper, obs_features, obs_points)        
+        obs_features = torch.cat((obs_features, gripper_features), dim=1)
+        obs_points['vectors'] = torch.cat((obs_points["vectors"], current_gripper[:,:,:3,:3]), dim=1)
+        obs_points['centers'] = torch.cat((obs_points["centers"], current_gripper[:,:,:3,-1]), dim=1)
+
+        if instruction is not None:
+            instr_features = self.encode_instruction(instruction)
+            obs_features = self.vision_language_attention(obs_features, instr_features)
+        else:
+            instr_features = None
+
+        return obs_points, obs_features, instr_features
     
 class SE3GraspFPSEncoder(SE3GraspPointCloudSuperEncoder):
     def __init__(self, dim_features=128, depth=3, nheads=4, n_steps_inf=50, fps_subsampling_factor=5, nhist=3, dim_pcd_features=64):
