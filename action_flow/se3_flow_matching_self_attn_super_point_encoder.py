@@ -10,13 +10,13 @@ from diffuser_actor.utils.utils import (
     quaternion_to_matrix
 )
 from action_flow.utils.geometry import se3_from_rot_pos
-from action_flow.utils.encoder import SE3GraspFPSEncoder, FeaturePCDEncoder
+from action_flow.utils.encoder import SE3GraspFPSSuperEncoder, FeaturePCDEncoder
 from action_flow.utils.se3_grasp_vector_field import SE3GraspVectorFieldSelfAttn
 from action_flow.utils.decoder import SE3PCDSelfAttnDecoder
 
 from geo3dattn.policy.se3_flowmatching.common.se3_flowmatching import RectifiedLinearFlow
 
-class SE3FlowMatchingSelfAttn(nn.Module):
+class SE3FlowMatchingSelfAttnSuperPoinEncoder(nn.Module):
 
     def __init__(self,
                  backbone="clip",
@@ -37,17 +37,15 @@ class SE3FlowMatchingSelfAttn(nn.Module):
             image_size=image_size,
             embedding_dim=embedding_dim
             )
-        encoder = SE3GraspFPSEncoder(
+        encoder = SE3GraspFPSSuperEncoder(
             dim_features=embedding_dim,
-            gripper_depth=2,
+            depth=6,
             nheads=8,
             fps_subsampling_factor=fps_subsampling_factor,
             nhist=nhist,
+            dim_pcd_features=embedding_dim
         )
-        decoder = SE3PCDSelfAttnDecoder(embedding_dim=embedding_dim,
-                                         x1_depth=1,
-                                         s_depth=2,
-                                         x2_depth=1)
+        decoder = SE3PCDSelfAttnDecoder(embedding_dim=embedding_dim)
         self.model = SE3GraspVectorFieldSelfAttn(
             encoder=encoder, 
             decoder=decoder, 

@@ -40,4 +40,4 @@ CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --cameras left_shoulder right_shoulder wrist front\
     --max_episodes_per_task -1 \
     --quaternion_format $quaternion_format \
-    --run_log_dir diffusion_multitask-C$C-B$B-lr$lr-DI$dense_interpolation-$interpolation_length-H$num_history-DT$diffusion_timesteps
+    --run_log_dir pointattn_spe_multitask-C$C-B$B-lr$lr-DI$dense_interpolation-$interpolation_length-H$num_history-DT$diffusion_timesteps

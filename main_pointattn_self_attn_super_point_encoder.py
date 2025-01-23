@@ -16,7 +16,7 @@ from torch.nn import functional as F
 
 from datasets.dataset_engine import RLBenchDataset
 from engine import BaseTrainTester
-from action_flow.se3_flow_matching_self_attn import SE3FlowMatchingSelfAttn
+from action_flow.se3_flow_matching_self_attn_super_point_encoder import SE3FlowMatchingSelfAttnSuperPoinEncoder
 
 from utils.common_utils import (
     load_instructions, count_parameters, get_gripper_loc_bounds
@@ -75,7 +75,7 @@ class Arguments(tap.Tap):
     keypose_only: int = 0
     num_history: int = 0
     relative_action: int = 0
-    fps_subsampling_factor: int = 10
+    fps_subsampling_factor: int = 5
     scaling_factor: float = 3.0
 
 
@@ -142,7 +142,7 @@ class TrainTester(BaseTrainTester):
     def get_model(self):
         """Initialize the model."""
         # Initialize model with arguments
-        _model = SE3FlowMatchingSelfAttn(
+        _model = SE3FlowMatchingSelfAttnSuperPoinEncoder(
             backbone=self.args.backbone,
             image_size=tuple(int(x) for x in self.args.image_size.split(",")),
             embedding_dim=self.args.embedding_dim,

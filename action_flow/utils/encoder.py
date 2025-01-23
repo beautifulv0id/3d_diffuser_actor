@@ -6,7 +6,7 @@ from pytorch3d.ops.knn import knn_points
 import einops
 from geo3dattn.model.common.module_attr_mixin import ModuleAttrMixin
 from geo3dattn.encoder.superpoint_encoder.super_point_encoder import SuperPointEncoder
-from geo3dattn.model.ursa_transformer.ursa_transformer import URSATransformerEncoder, URSATransformer
+from geo3dattn.model.ursa_transformer.ursa_transformer import URSATransformer
 from geo3dattn.encoder.common.position_encoder import PositionalEncoding
 from diffuser_actor.utils.layers import ParallelAttention
 from diffuser_actor.utils.resnet import load_resnet50, load_resnet18
@@ -271,9 +271,9 @@ class SE3GraspPointCloudSuperEncoder(SE3GraspPointCloudEncoder):
 
         return obs_points, obs_features, instr_features
     
-class SE3GraspFPSEncoder(SE3GraspPointCloudSuperEncoder):
+class SE3GraspFPSSuperEncoder(SE3GraspPointCloudSuperEncoder):
     def __init__(self, dim_features=128, depth=3, nheads=4, n_steps_inf=50, fps_subsampling_factor=5, nhist=3, dim_pcd_features=64):
-        super(SE3GraspFPSEncoder, self).__init__(dim_features, depth, nheads, n_steps_inf, fps_subsampling_factor, nhist, dim_pcd_features)
+        super(SE3GraspFPSSuperEncoder, self).__init__(dim_features, depth, nheads, n_steps_inf, fps_subsampling_factor, nhist, dim_pcd_features)
         input_dim = dim_pcd_features
         output_dim = dim_features
         self.linear = nn.Linear(input_dim, output_dim)
@@ -288,6 +288,51 @@ class SE3GraspFPSEncoder(SE3GraspPointCloudSuperEncoder):
         obs_f = self.linear(obs_f)
         return obs_x, obs_f, obs_pcd_x, obs_pcd_f, inst_f
 
+class SE3GraspFPSEncoder(SE3GraspPointCloudEncoder):
+    def __init__(self, dim_features=128, gripper_depth=3, nheads=4, n_steps_inf=50, fps_subsampling_factor=5, nhist=3):
+        super(SE3GraspFPSEncoder, self).__init__(dim_features, gripper_depth, nheads, n_steps_inf, nhist)
+        self.fps_subsampling_factor = fps_subsampling_factor
+        output_dim = dim_features
+        self.linear = nn.Linear(dim_features, output_dim)
+
+    def compute_fps(self, pcd, pcd_features):
+        n_points_out = pcd_features.shape[1] // self.fps_subsampling_factor
+        ## Get n points via FPS ##
+        out_pcd, out_indices = fps(pcd, K=n_points_out)
+        obs_vectors_fps = torch.zeros((3,3))[None,None,:,:].repeat(out_pcd.shape[0], out_pcd.shape[1], 1, 1).to(pcd.device)
+        obs_points_fps = {'centers': out_pcd, 'vectors': obs_vectors_fps}
+        out_pcd_features = torch.gather(pcd_features, 1, out_indices.unsqueeze(-1).expand(-1, -1, pcd_features.shape[-1]))
+        return obs_points_fps, out_pcd_features
+
+    def encode_obs(self, obs):
+        pcd = obs['pcd']
+        pcd_features = obs['pcd_features']
+        current_gripper = obs['current_gripper']
+        instruction = obs.get('instruction', None)
+
+        batch = pcd.shape[0]
+        device = pcd.device
+
+        vectors = torch.zeros((3,3))[None,None,:,:].repeat(batch, pcd.shape[1], 1, 1).to(device)
+        obs_points = {'centers': pcd, 'vectors': vectors}
+        obs_features = pcd_features
+
+        # pcd - instruction attention
+        if instruction is not None:
+            instr_features = self.encode_instruction(instruction)
+            obs_features = self.vision_language_attention(obs_features, instr_features)
+        else:
+            instr_features = None
+
+        # add gripper features
+        gripper_features = self.encode_gripper(current_gripper, obs_features, obs_points)        
+        obs_features = torch.cat((obs_features, gripper_features), dim=1)
+        obs_points['vectors'] = torch.cat((obs_points["vectors"], current_gripper[:,:,:3,:3]), dim=1)
+        obs_points['centers'] = torch.cat((obs_points["centers"], current_gripper[:,:,:3,-1]), dim=1)
+
+        obs_points_fps, pcd_features_fps = self.compute_fps(pcd, pcd_features)
+
+        return obs_points, obs_features, obs_points_fps, pcd_features_fps, instr_features
 
 class FeaturePCDEncoder(ModuleAttrMixin):
     
