@@ -140,7 +140,7 @@ class Actioner:
         apply_cameras=("left_shoulder", "right_shoulder", "wrist"),
         action_dim=7,
         predict_trajectory=True,
-        model='pointattn',
+        test_model='pointattn',
         verbose=False
     ):
         self._policy = policy
@@ -155,7 +155,7 @@ class Actioner:
 
         self._policy.eval()
 
-        self._model = model
+        self._test_model = test_model
         self._verbose = verbose
 
     def load_episode(self, task_str, variation):
@@ -228,7 +228,7 @@ class Actioner:
             traj_mask = torch.full(
                 [1, interpolation_length - 1], False
             ).to(rgbs.device)
-            if 'pointattn' in self._model:
+            if 'pointattn' in self._test_model:
                 output["trajectory"] = self._policy(
                     fake_traj,
                     rgbs[:, -1],
@@ -516,9 +516,11 @@ class RLBenchEnv:
 
             try:
                 demo = self.get_demo(task_str, variation, episode_index=demo_id)[0]
-                print(f"Loaded demo {demo_id}")
                 num_valid_demos += 1
-            except:
+            except Exception as e:
+                if verbose:
+                    print(f"Could not load episode demo {task_str} with variation {variation} from {self.data_path}")
+                    print("Exception:", e)
                 continue
 
             rgbs = torch.Tensor([]).to(device)
