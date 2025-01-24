@@ -7,6 +7,9 @@
 #SBATCH --output=train_logs/slurm_logs/%j_train.out
 #SBATCH -J pointattn
 
+conda activate 3d_diffuser_actor
+cd ~/3d_diffuser_actor
+
 config_name=PointAttn_18Peract_100Demo_multitask
 main_dir=$(./scripts/get_log_path.sh $config_name)
 
@@ -18,7 +21,7 @@ dense_interpolation=1
 interpolation_length=2
 num_history=3
 diffusion_timesteps=100
-B=1
+B=8
 C=120
 ngpus=$(python3 scripts/helper/count_cuda_devices.py)
 quaternion_format=xyzw
@@ -34,7 +37,7 @@ CUDA_LAUNCH_BLOCKING=1 WANDB_PROJECT=3d_diffuser_actor_debug torchrun --nproc_pe
     --train_iters 600000 \
     --embedding_dim $C \
     --diffusion_timesteps $diffusion_timesteps \
-    --val_freq 500 \
+    --val_freq 1 \
     --dense_interpolation $dense_interpolation \
     --interpolation_length $interpolation_length \
     --exp_log_dir $main_dir \
