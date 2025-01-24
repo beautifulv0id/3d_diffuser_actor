@@ -25,11 +25,13 @@ class SE3FlowMatching(nn.Module):
                  nhist=3,
                  relative=False,
                  scaling_factor=3.0,
+                 rot_factor=2.0,
                  use_normals=False):
         super().__init__()
         self._quaternion_format = quaternion_format
         self._relative = relative
         self._use_normals = use_normals
+        self._rot_factor = rot_factor
         self.feature_pcd_encoder = FeaturePCDEncoder(
             backbone=backbone,
             image_size=image_size,
@@ -39,7 +41,7 @@ class SE3FlowMatching(nn.Module):
             dim_features=embedding_dim,
             gripper_depth=2,
             nheads=8,
-            n_steps_inf=50,
+            n_steps_inf=diffusion_timesteps,
             nhist=nhist,
         )
         decoder = URSATransformer(d_model=embedding_dim, nhead=8, num_layers=4, dropout=0.2)
@@ -226,7 +228,7 @@ class SE3FlowMatching(nn.Module):
         # Compute loss
         loss = (
                 30 * F.l1_loss(d_act[...,:3], target[...,:3], reduction='mean')
-                + 10 * F.l1_loss(d_act[..., 3:6], target[..., 3:6], reduction='mean')
+                + self._rot_factor * 10 * F.l1_loss(d_act[..., 3:6], target[..., 3:6], reduction='mean')
         )
         if torch.numel(gt_openess) > 0:
             loss += F.binary_cross_entropy(openess, gt_openess)

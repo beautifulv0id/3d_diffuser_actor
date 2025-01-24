@@ -77,6 +77,7 @@ class Arguments(tap.Tap):
     relative_action: int = 0
     scaling_factor: float = 3.0
     use_normals: int = 0
+    rot_factor: int = 1.0
 
 
 class TrainTester(BaseTrainTester):
@@ -120,7 +121,7 @@ class TrainTester(BaseTrainTester):
             return_low_lvl_trajectory=True,
             dense_interpolation=bool(self.args.dense_interpolation),
             interpolation_length=self.args.interpolation_length,
-            use_normals=bool(self.args.use_normals)
+            use_normals=bool(self.args.use_normals),
         )
         test_dataset = RLBenchDataset(
             root=self.args.valset,
@@ -137,7 +138,7 @@ class TrainTester(BaseTrainTester):
             return_low_lvl_trajectory=True,
             dense_interpolation=bool(self.args.dense_interpolation),
             interpolation_length=self.args.interpolation_length,
-            use_normals=bool(self.args.use_normals)
+            use_normals=bool(self.args.use_normals),
         )
         return train_dataset, test_dataset
 
@@ -154,7 +155,8 @@ class TrainTester(BaseTrainTester):
             nhist=self.args.num_history,
             relative=bool(self.args.relative_action),
             scaling_factor=args.scaling_factor,
-            use_normals=bool(self.args.use_normals)
+            use_normals=bool(self.args.use_normals),
+            rot_factor=self.args.rot_factor
         )
         print("Model parameters:", count_parameters(_model))
 
