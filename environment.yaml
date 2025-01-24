@@ -43,4 +43,4 @@ dependencies:
     - traitlets>=5.1
     - pandas
     - diffusers
-    - zarr=2.16.1
+    - zarr==2.16.1
