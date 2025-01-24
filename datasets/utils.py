@@ -58,6 +58,7 @@ class Resize:
 
     def __call__(self, **kwargs):
         """Accept tensors as T, N, C, H, W."""
+        kwargs = {k: v for k, v in kwargs.items() if v is not None}
         keys = list(kwargs.keys())
 
         if len(keys) == 0:

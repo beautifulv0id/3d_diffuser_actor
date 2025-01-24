@@ -75,8 +75,8 @@ class Arguments(tap.Tap):
     keypose_only: int = 0
     num_history: int = 0
     relative_action: int = 0
-    fps_subsampling_factor: int = 5
     scaling_factor: float = 3.0
+    use_normals: int = 0
 
 
 class TrainTester(BaseTrainTester):
@@ -119,7 +119,8 @@ class TrainTester(BaseTrainTester):
             ),
             return_low_lvl_trajectory=True,
             dense_interpolation=bool(self.args.dense_interpolation),
-            interpolation_length=self.args.interpolation_length
+            interpolation_length=self.args.interpolation_length,
+            use_normals=bool(self.args.use_normals)
         )
         test_dataset = RLBenchDataset(
             root=self.args.valset,
@@ -135,7 +136,8 @@ class TrainTester(BaseTrainTester):
             ),
             return_low_lvl_trajectory=True,
             dense_interpolation=bool(self.args.dense_interpolation),
-            interpolation_length=self.args.interpolation_length
+            interpolation_length=self.args.interpolation_length,
+            use_normals=bool(self.args.use_normals)
         )
         return train_dataset, test_dataset
 
@@ -146,13 +148,13 @@ class TrainTester(BaseTrainTester):
             backbone=self.args.backbone,
             image_size=tuple(int(x) for x in self.args.image_size.split(",")),
             embedding_dim=self.args.embedding_dim,
-            fps_subsampling_factor=self.args.fps_subsampling_factor,
             gripper_loc_bounds=self.args.gripper_loc_bounds,
             quaternion_format=self.args.quaternion_format,
             diffusion_timesteps=self.args.diffusion_timesteps,
             nhist=self.args.num_history,
             relative=bool(self.args.relative_action),
-            scaling_factor=args.scaling_factor
+            scaling_factor=args.scaling_factor,
+            use_normals=bool(self.args.use_normals)
         )
         print("Model parameters:", count_parameters(_model))
 
@@ -181,6 +183,7 @@ class TrainTester(BaseTrainTester):
             sample["trajectory"],
             sample["rgbs"],
             sample["pcds"],
+            sample["normals"],
             sample["instr"],
             curr_gripper
         )
@@ -232,6 +235,7 @@ class TrainTester(BaseTrainTester):
                 sample["trajectory"].to(device),
                 sample["rgbs"].to(device),
                 sample["pcds"].to(device),
+                sample["normals"].to(device),
                 sample["instr"].to(device),
                 curr_gripper.to(device),
                 run_inference=True
@@ -292,7 +296,7 @@ def traj_collate_fn(batch):
     keys = [
         "trajectory", "trajectory_mask",
         "rgbs", "pcds",
-        "curr_gripper", "curr_gripper_history", "action", "instr"
+        "curr_gripper", "curr_gripper_history", "action", "instr", "normals"
     ]
     ret_dict = {
         key: torch.cat([

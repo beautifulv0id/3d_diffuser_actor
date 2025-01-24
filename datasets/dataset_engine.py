@@ -6,6 +6,7 @@ from pathlib import Path
 from time import time
 
 import torch
+import numpy as np
 from torch.utils.data import Dataset
 
 from .utils import loader, Resize, TrajectoryInterpolator
@@ -33,7 +34,8 @@ class RLBenchDataset(Dataset):
         return_low_lvl_trajectory=False,
         dense_interpolation=False,
         interpolation_length=100,
-        relative_action=False
+        relative_action=False,
+        use_normals=False
     ):
         self._cache = {}
         self._cache_size = cache_size
@@ -43,6 +45,7 @@ class RLBenchDataset(Dataset):
         self._training = training
         self._taskvar = taskvar
         self._return_low_lvl_trajectory = return_low_lvl_trajectory
+        self._use_normals = use_normals
         if isinstance(root, (Path, str)):
             root = [Path(root)]
         self._root = [Path(r).expanduser() for r in root]
@@ -177,6 +180,10 @@ class RLBenchDataset(Dataset):
         # Split RGB and XYZ
         rgbs = states[:, :, 0]
         pcds = states[:, :, 1]
+        if self._use_normals:
+            normals = states[:, :, 2]
+        else:
+            normals = None
         rgbs = self._unnormalize_rgb(rgbs)
 
         # Get action tensors for respective frame ids
@@ -228,14 +235,25 @@ class RLBenchDataset(Dataset):
             if traj is not None:
                 for t, tlen in enumerate(traj_lens):
                     traj[t, tlen:] = 0
-            modals = self._resize(rgbs=rgbs, pcds=pcds)
-            rgbs = modals["rgbs"]
-            pcds = modals["pcds"]
+            if not self._use_normals:
+                modals = self._resize(rgbs=rgbs, pcds=pcds, normals=normals)
+                rgbs = modals["rgbs"]
+                pcds = modals["pcds"]
+            else:
+                modals = self._resize(rgbs=rgbs, pcds=pcds, normals=normals)
+                rgbs = modals["rgbs"]
+                pcds = modals["pcds"]
+                normals = modals["normals"]
+                # re-normalize normals
+                normals_magnitude = np.linalg.norm(normals, axis=2, keepdims=True)
+                normals_magnitude[normals_magnitude == 0] = 1
+                normals = normals / normals_magnitude
 
         ret_dict = {
             "task": [task for _ in frame_ids],
             "rgbs": rgbs,  # e.g. tensor (n_frames, n_cam, 3+1, H, W)
             "pcds": pcds,  # e.g. tensor (n_frames, n_cam, 3, H, W)
+            "normals": normals,  # e.g. tensor (n_frames, n_cam, 3, H, W)
             "action": action,  # e.g. tensor (n_frames, 8), target pose
             "instr": instr,  # a (n_frames, 53, 512) tensor
             "curr_gripper": gripper,

@@ -13,6 +13,7 @@ B=3
 C=120
 ngpus=$(python3 scripts/helper/count_cuda_devices.py)
 quaternion_format=xyzw
+use_normals=1
 
 CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     main_pointattn.py \
@@ -40,4 +41,5 @@ CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --cameras left_shoulder right_shoulder wrist front\
     --max_episodes_per_task -1 \
     --quaternion_format $quaternion_format \
+    --use_normals $use_normals \
     --run_log_dir pointattn_multitask-C$C-B$B-lr$lr-DI$dense_interpolation-$interpolation_length-H$num_history-DT$diffusion_timesteps

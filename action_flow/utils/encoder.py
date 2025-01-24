@@ -187,12 +187,15 @@ class SE3GraspPointCloudEncoder(ModuleAttrMixin):
         pcd_features = obs['pcd_features']
         current_gripper = obs['current_gripper']
         instruction = obs.get('instruction', None)
+        normals = obs.get('normals', None)
 
         batch = pcd.shape[0]
         device = pcd.device
 
         # encode pcd
         vectors = torch.zeros((3,3))[None,None,:,:].repeat(batch, pcd.shape[1], 1, 1).to(device)
+        if normals is not None:
+            vectors[...,:3,0] = normals
         obs_points = {'centers': pcd, 'vectors': vectors}
 
         obs_features = pcd_features
@@ -368,7 +371,7 @@ class FeaturePCDEncoder(ModuleAttrMixin):
     def forward(self, rgb, pcd):
         return self.get_feature_pcd(rgb, pcd)
 
-    def get_feature_pcd(self, rgb, pcd):
+    def get_feature_pcd(self, rgb, pcd, normals=None):
         """
         Compute visual features
 
@@ -391,6 +394,9 @@ class FeaturePCDEncoder(ModuleAttrMixin):
         # Treat different cameras separately
         pcd = einops.rearrange(pcd, "bt ncam c h w -> (bt ncam) c h w")
 
+        if normals is not None:
+            normals = einops.rearrange(normals, "bt ncam c h w -> (bt ncam) c h w")
+
         # Interpolate xy-depth to get the locations for this level
         feat_h, feat_w = rgb_features.shape[-2:]
         pcd = F.interpolate(
@@ -398,6 +404,13 @@ class FeaturePCDEncoder(ModuleAttrMixin):
             (feat_h, feat_w),
             mode='bilinear'
         )
+
+        if normals is not None:
+            normals = F.interpolate(
+                normals,
+                (feat_h, feat_w),
+                mode='bilinear'
+            )
 
         # Merge different cameras for clouds, separate for rgb features
         pcd = einops.rearrange(
@@ -408,8 +421,13 @@ class FeaturePCDEncoder(ModuleAttrMixin):
             rgb_features,
             "(bt ncam) c h w -> bt (ncam h w) c", ncam=num_cameras
         )
+        if normals is not None:
+            normals = einops.rearrange(
+                normals,
+                "(bt ncam) c h w -> bt (ncam h w) c", ncam=num_cameras
+            )
 
         # Project to embedding dim
         rgb_features = self.to_out(rgb_features)
 
-        return rgb_features, pcd
+        return rgb_features, pcd, normals

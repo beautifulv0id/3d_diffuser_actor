@@ -1,9 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import einops
-from diffuser_actor.utils.encoder import Encoder
-from diffuser_actor.utils.layers import ParallelAttention
 from diffuser_actor.utils.utils import (
     normalise_quat,
     matrix_to_quaternion,
@@ -22,16 +19,17 @@ class SE3FlowMatching(nn.Module):
                  backbone="clip",
                  image_size=(256, 256),
                  embedding_dim=60,
-                 fps_subsampling_factor=5,
                  gripper_loc_bounds=None,
                  quaternion_format='xyzw',
                  diffusion_timesteps=100,
                  nhist=3,
                  relative=False,
-                 scaling_factor=3.0,):
+                 scaling_factor=3.0,
+                 use_normals=False):
         super().__init__()
         self._quaternion_format = quaternion_format
         self._relative = relative
+        self._use_normals = use_normals
         self.feature_pcd_encoder = FeaturePCDEncoder(
             backbone=backbone,
             image_size=image_size,
@@ -151,6 +149,7 @@ class SE3FlowMatching(nn.Module):
         gt_trajectory,
         rgb_obs,
         pcd_obs,
+        normals_obs,
         instruction,
         curr_gripper,
         run_inference=False
@@ -169,7 +168,7 @@ class SE3FlowMatching(nn.Module):
             is ALWAYS expressed as a quaternion form.
             The model converts it to 6D internally if needed.
         """
-        feature_obs, pcd_obs = self.feature_pcd_encoder(rgb_obs, pcd_obs)
+        feature_obs, pcd_obs, normal_obs = self.feature_pcd_encoder(rgb_obs, pcd_obs)
         if self._relative:
             pcd_obs, curr_gripper = self.convert2rel(pcd_obs, curr_gripper)
         if gt_trajectory is not None:
@@ -193,6 +192,7 @@ class SE3FlowMatching(nn.Module):
 
         obs = {
             'pcd': pcd_obs,
+            'normals': normal_obs,
             'current_gripper': curr_gripper,
             'pcd_features': feature_obs,
             'instruction': instruction
