@@ -18,6 +18,7 @@ rot_factor=1
 gripper_depth=2
 decoder_depth=8
 decoder_dropout=0.2
+distance_scale=1.0
 
 CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     main_pointattn.py \
@@ -30,7 +31,7 @@ CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --train_iters 600000 \
     --embedding_dim $C \
     --diffusion_timesteps $diffusion_timesteps \
-    --val_freq 4000 \
+    --val_freq 10 \
     --dense_interpolation $dense_interpolation \
     --interpolation_length $interpolation_length \
     --exp_log_dir $main_dir \
@@ -50,4 +51,5 @@ CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --gripper_depth $gripper_depth\
     --decoder_depth $decoder_depth\
     --decoder_dropout $decoder_dropout\
+    --distance_scale $distance_scale\
     --run_log_dir pointattn_multitask-C$C-B$B-lr$lr-DI$dense_interpolation-$interpolation_length-H$num_history-DT$diffusion_timesteps
