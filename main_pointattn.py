@@ -81,6 +81,7 @@ class Arguments(tap.Tap):
     gripper_depth: int = 2
     decoder_depth: int = 4
     decoder_dropout: float = 0.2
+    distance_scale: float = 1.0
 
 class TrainTester(BaseTrainTester):
     """Train/test a trajectory optimization algorithm."""
@@ -161,7 +162,8 @@ class TrainTester(BaseTrainTester):
             rot_factor=self.args.rot_factor,
             gripper_depth=self.args.gripper_depth,
             decoder_depth=self.args.decoder_depth,
-            decoder_dropout=self.args.decoder_dropout
+            decoder_dropout=self.args.decoder_dropout,
+            distance_scale=self.args.distance_scale
         )
         print("Model parameters:", count_parameters(_model))
 

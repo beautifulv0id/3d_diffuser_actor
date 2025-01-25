@@ -30,6 +30,7 @@ class SE3FlowMatching(nn.Module):
                  gripper_depth=2,
                  decoder_depth=4,
                  decoder_dropout=0.2,
+                 distance_scale=1.0
                  ):
         super().__init__()
         self._quaternion_format = quaternion_format
@@ -48,7 +49,7 @@ class SE3FlowMatching(nn.Module):
             n_steps_inf=diffusion_timesteps,
             nhist=nhist,
         )
-        decoder = URSATransformer(d_model=embedding_dim, nhead=8, num_layers=decoder_depth, dropout=decoder_dropout)
+        decoder = URSATransformer(d_model=embedding_dim, nhead=8, num_layers=decoder_depth, dropout=decoder_dropout, distance_scale=distance_scale)
         self.model = SE3GraspVectorField(
             encoder=encoder, 
             decoder=decoder, 
