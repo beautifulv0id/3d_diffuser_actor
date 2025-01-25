@@ -380,10 +380,7 @@ class FeaturePCDEncoder(ModuleAttrMixin):
 
         self.to_out = nn.Linear(self.out_dim, embedding_dim)
         
-    def forward(self, rgb, pcd):
-        return self.get_feature_pcd(rgb, pcd)
-
-    def get_feature_pcd(self, rgb, pcd, normals=None):
+    def forward(self, rgb, pcd, normals=None):
         """
         Compute visual features
 
