@@ -26,7 +26,11 @@ class SE3FlowMatching(nn.Module):
                  relative=False,
                  scaling_factor=3.0,
                  rot_factor=2.0,
-                 use_normals=False):
+                 use_normals=False,
+                 gripper_depth=2,
+                 decoder_depth=4,
+                 decoder_dropout=0.2,
+                 ):
         super().__init__()
         self._quaternion_format = quaternion_format
         self._relative = relative
@@ -39,12 +43,12 @@ class SE3FlowMatching(nn.Module):
             )
         encoder = SE3GraspPointCloudEncoder(
             dim_features=embedding_dim,
-            gripper_depth=2,
+            gripper_depth=gripper_depth,
             nheads=8,
             n_steps_inf=diffusion_timesteps,
             nhist=nhist,
         )
-        decoder = URSATransformer(d_model=embedding_dim, nhead=8, num_layers=4, dropout=0.2)
+        decoder = URSATransformer(d_model=embedding_dim, nhead=8, num_layers=decoder_depth, dropout=decoder_dropout)
         self.model = SE3GraspVectorField(
             encoder=encoder, 
             decoder=decoder, 

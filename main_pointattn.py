@@ -233,11 +233,12 @@ class TrainTester(BaseTrainTester):
                 sample["curr_gripper"] if self.args.num_history < 1
                 else sample["curr_gripper_history"][:, -self.args.num_history:]
             )
+            normals = sample["normals"].to(device) if sample["normals"] is not None else None
             action = model(
                 sample["trajectory"].to(device),
                 sample["rgbs"].to(device),
                 sample["pcds"].to(device),
-                sample["normals"].to(device),
+                normals,
                 sample["instr"].to(device),
                 curr_gripper.to(device),
                 run_inference=True
@@ -298,7 +299,7 @@ def traj_collate_fn(batch):
     keys = [
         "trajectory", "trajectory_mask",
         "rgbs", "pcds",
-        "curr_gripper", "curr_gripper_history", "action", "instr", "normals"
+        "curr_gripper", "curr_gripper_history", "action", "instr"
     ]
     ret_dict = {
         key: torch.cat([
@@ -306,6 +307,10 @@ def traj_collate_fn(batch):
             for item in batch
         ]) for key in keys
     }
+    if batch[0]["normals"] is not None:
+        ret_dict["normals"] = torch.cat([item["normals"].float() for item in batch])
+    else:
+        ret_dict["normals"] = None
 
     ret_dict["task"] = []
     for item in batch:
