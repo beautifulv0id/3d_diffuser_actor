@@ -78,7 +78,9 @@ class Arguments(tap.Tap):
     scaling_factor: float = 3.0
     use_normals: int = 0
     rot_factor: int = 1.0
-
+    gripper_depth: int = 2
+    decoder_depth: int = 4
+    decoder_dropout: float = 0.2
 
 class TrainTester(BaseTrainTester):
     """Train/test a trajectory optimization algorithm."""
