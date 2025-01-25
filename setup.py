@@ -9,8 +9,7 @@ core_requirements = [
     "numpy",
     "torchvision",
     "diffusers",
-    "dgl",
-    "flash_attn",
+    "open3d"
 ]
 
 setup(name='diffuser_actor',
