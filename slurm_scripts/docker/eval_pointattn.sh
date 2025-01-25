@@ -3,7 +3,7 @@ exp=point_attn
 tasks=(
     close_jar # insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap place_cups
 )
-data_dir=/workspace/data/peract/raw/test/
+data_dir=$PERACT_TEST_DIR
 num_episodes=100
 gripper_loc_bounds_file=tasks/18_peract_tasks_location_bounds.json
 max_tries=2
@@ -39,7 +39,7 @@ for ((i=0; i<$num_ckpts; i++)); do
     --data_dir $data_dir \
     --num_episodes $num_episodes \
     --output_file eval_logs/$exp/seed$seed/${tasks[$i]}.json  \
-    --instructions /workspace/data/peract/instructions.pkl \
+    --instructions $PERACT_INSTRUCTIONS \
     --variations {0..60} \
     --max_tries $max_tries \
     --max_steps 25 \

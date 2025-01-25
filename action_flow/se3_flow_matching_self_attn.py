@@ -28,10 +28,19 @@ class SE3FlowMatchingSelfAttn(nn.Module):
                  diffusion_timesteps=100,
                  nhist=3,
                  relative=False,
-                 scaling_factor=3.0,):
+                 scaling_factor=3.0,
+                 rot_factor=2.0,
+                 use_normals=False,
+                 gripper_depth=2,
+                 decoder_depth=2,
+                 decoder_dropout=0.2,
+                ):
         super().__init__()
         self._quaternion_format = quaternion_format
         self._relative = relative
+        self._use_normals = use_normals
+        self._rot_factor = rot_factor
+
         self.feature_pcd_encoder = FeaturePCDEncoder(
             backbone=backbone,
             image_size=image_size,
@@ -39,15 +48,16 @@ class SE3FlowMatchingSelfAttn(nn.Module):
             )
         encoder = SE3GraspFPSEncoder(
             dim_features=embedding_dim,
-            gripper_depth=2,
+            gripper_depth=gripper_depth,
             nheads=8,
             fps_subsampling_factor=fps_subsampling_factor,
             nhist=nhist,
         )
         decoder = SE3PCDSelfAttnDecoder(embedding_dim=embedding_dim,
                                          x1_depth=1,
-                                         s_depth=2,
-                                         x2_depth=1)
+                                         s_depth=decoder_depth,
+                                         x2_depth=1,
+                                         dropout=decoder_dropout)
         self.model = SE3GraspVectorFieldSelfAttn(
             encoder=encoder, 
             decoder=decoder, 
@@ -154,6 +164,7 @@ class SE3FlowMatchingSelfAttn(nn.Module):
         gt_trajectory,
         rgb_obs,
         pcd_obs,
+        normal_obs,
         instruction,
         curr_gripper,
         run_inference=False
@@ -172,7 +183,7 @@ class SE3FlowMatchingSelfAttn(nn.Module):
             is ALWAYS expressed as a quaternion form.
             The model converts it to 6D internally if needed.
         """
-        feature_obs, pcd_obs = self.feature_pcd_encoder(rgb_obs, pcd_obs)
+        feature_obs, pcd_obs, normal_obs = self.feature_pcd_encoder(rgb_obs, pcd_obs, normal_obs)
         if self._relative:
             pcd_obs, curr_gripper = self.convert2rel(pcd_obs, curr_gripper)
         if gt_trajectory is not None:
@@ -196,6 +207,7 @@ class SE3FlowMatchingSelfAttn(nn.Module):
 
         obs = {
             'pcd': pcd_obs,
+            'normals': normal_obs,
             'current_gripper': curr_gripper,
             'pcd_features': feature_obs,
             'instruction': instruction
@@ -229,7 +241,7 @@ class SE3FlowMatchingSelfAttn(nn.Module):
         # Compute loss
         loss = (
                 30 * F.l1_loss(d_act[...,:3], target[...,:3], reduction='mean')
-                + 10 * F.l1_loss(d_act[..., 3:6], target[..., 3:6], reduction='mean')
+                + self._rot_factor * 10 * F.l1_loss(d_act[..., 3:6], target[..., 3:6], reduction='mean')
         )
         if torch.numel(gt_openess) > 0:
             loss += F.binary_cross_entropy(openess, gt_openess)

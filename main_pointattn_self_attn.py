@@ -45,12 +45,12 @@ class Arguments(tap.Tap):
     valset: Path
     dense_interpolation: int = 0
     interpolation_length: int = 100
-    name: str = 'train_point_attention_self_attn'
 
     # Logging to base_log_dir/exp_log_dir/run_log_dir
     base_log_dir: Path = Path(__file__).parent / "train_logs"
     exp_log_dir: str = "exp"
     run_log_dir: str = "run"
+    name: str = 'train_point_attention_self_attn'
 
     # Main training parameters
     num_workers: int = 1
@@ -77,7 +77,11 @@ class Arguments(tap.Tap):
     relative_action: int = 0
     fps_subsampling_factor: int = 10
     scaling_factor: float = 3.0
-
+    use_normals: int = 0
+    rot_factor: int = 1.0
+    gripper_depth: int = 2
+    decoder_depth: int = 4
+    decoder_dropout: float = 0.2
 
 class TrainTester(BaseTrainTester):
     """Train/test a trajectory optimization algorithm."""
@@ -119,7 +123,8 @@ class TrainTester(BaseTrainTester):
             ),
             return_low_lvl_trajectory=True,
             dense_interpolation=bool(self.args.dense_interpolation),
-            interpolation_length=self.args.interpolation_length
+            interpolation_length=self.args.interpolation_length,
+            use_normals=bool(self.args.use_normals),
         )
         test_dataset = RLBenchDataset(
             root=self.args.valset,
@@ -135,7 +140,8 @@ class TrainTester(BaseTrainTester):
             ),
             return_low_lvl_trajectory=True,
             dense_interpolation=bool(self.args.dense_interpolation),
-            interpolation_length=self.args.interpolation_length
+            interpolation_length=self.args.interpolation_length,
+            use_normals=bool(self.args.use_normals),
         )
         return train_dataset, test_dataset
 
@@ -152,7 +158,12 @@ class TrainTester(BaseTrainTester):
             diffusion_timesteps=self.args.diffusion_timesteps,
             nhist=self.args.num_history,
             relative=bool(self.args.relative_action),
-            scaling_factor=args.scaling_factor
+            scaling_factor=args.scaling_factor,
+            use_normals=bool(self.args.use_normals),
+            rot_factor=self.args.rot_factor,
+            gripper_depth=self.args.gripper_depth,
+            decoder_depth=self.args.decoder_depth,
+            decoder_dropout=self.args.decoder_dropout
         )
         print("Model parameters:", count_parameters(_model))
 
@@ -228,10 +239,12 @@ class TrainTester(BaseTrainTester):
                 sample["curr_gripper"] if self.args.num_history < 1
                 else sample["curr_gripper_history"][:, -self.args.num_history:]
             )
+            normals = sample["normals"].to(device) if sample["normals"] is not None else None
             action = model(
                 sample["trajectory"].to(device),
                 sample["rgbs"].to(device),
                 sample["pcds"].to(device),
+                normals,
                 sample["instr"].to(device),
                 curr_gripper.to(device),
                 run_inference=True
@@ -300,6 +313,10 @@ def traj_collate_fn(batch):
             for item in batch
         ]) for key in keys
     }
+    if batch[0]["normals"] is not None:
+        ret_dict["normals"] = torch.cat([item["normals"].float() for item in batch])
+    else:
+        ret_dict["normals"] = None
 
     ret_dict["task"] = []
     for item in batch:

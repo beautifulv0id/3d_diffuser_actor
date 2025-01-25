@@ -13,6 +13,11 @@ B=4
 C=120
 ngpus=$(python3 scripts/helper/count_cuda_devices.py)
 quaternion_format=xyzw
+use_normals=0
+rot_factor=1
+gripper_depth=2
+decoder_depth=8
+decoder_dropout=0.2
 
 CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     main_pointattn_self_attn.py \
@@ -40,5 +45,10 @@ CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --cameras left_shoulder right_shoulder wrist front\
     --max_episodes_per_task -1 \
     --quaternion_format $quaternion_format \
+    --use_normals $use_normals \
+    --rot_factor $rot_factor \
+    --gripper_depth $gripper_depth\
+    --decoder_depth $decoder_depth\
+    --decoder_dropout $decoder_dropout\
     --run_log_dir pointattn_sa_multitask-C$C-B$B-lr$lr-DI$dense_interpolation-$interpolation_length-H$num_history-DT$diffusion_timesteps \
     --fps_subsampling_factor 10

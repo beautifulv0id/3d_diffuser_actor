@@ -228,11 +228,12 @@ class Actioner:
             traj_mask = torch.full(
                 [1, interpolation_length - 1], False
             ).to(rgbs.device)
-            if 'pointattn' in self._test_model:
+            if self._test_model == 'pointattn':
                 output["trajectory"] = self._policy(
                     fake_traj,
                     rgbs[:, -1],
                     pcds[:, -1],
+                    None,
                     self._instr,
                     gripper[..., :7],
                     run_inference=True

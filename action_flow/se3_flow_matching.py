@@ -155,7 +155,7 @@ class SE3FlowMatching(nn.Module):
         gt_trajectory,
         rgb_obs,
         pcd_obs,
-        normals_obs,
+        normal_obs,
         instruction,
         curr_gripper,
         run_inference=False
@@ -174,7 +174,7 @@ class SE3FlowMatching(nn.Module):
             is ALWAYS expressed as a quaternion form.
             The model converts it to 6D internally if needed.
         """
-        feature_obs, pcd_obs, normal_obs = self.feature_pcd_encoder(rgb_obs, pcd_obs)
+        feature_obs, pcd_obs, normal_obs = self.feature_pcd_encoder(rgb_obs, pcd_obs, normal_obs)
         if self._relative:
             pcd_obs, curr_gripper = self.convert2rel(pcd_obs, curr_gripper)
         if gt_trajectory is not None:

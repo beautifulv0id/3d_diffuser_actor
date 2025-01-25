@@ -246,6 +246,7 @@ class SE3GraspPointCloudSuperEncoder(SE3GraspPointCloudEncoder):
         pcd = obs['pcd']
         pcd_features = obs['pcd_features']
         current_gripper = obs['current_gripper']
+        normals = obs.get('normals', None)
         instruction = obs.get('instruction', None)
 
         batch = pcd.shape[0]
@@ -253,6 +254,9 @@ class SE3GraspPointCloudSuperEncoder(SE3GraspPointCloudEncoder):
 
         # encode pcd
         vectors = torch.zeros((3,3))[None,None,:,:].repeat(batch, pcd.shape[1], 1, 1).to(device)
+        if normals is not None:
+            vectors[...,:3,0] = normals
+
         obs_points = {'centers': pcd, 'vectors': vectors}
 
         obs_features = pcd_features
@@ -284,9 +288,12 @@ class SE3GraspFPSSuperEncoder(SE3GraspPointCloudSuperEncoder):
     def encode_obs(self, obs):
         obs_pcd_x, obs_pcd_f, inst_f = super().encode_obs(obs)
         pcd, obs_f = obs['pcd'], obs['pcd_features']
+        normals = obs.get('normals', None)
         batch = pcd.shape[0]
         device = pcd.device
         vectors = torch.zeros((3,3))[None,None,:,:].repeat(batch, pcd.shape[1], 1, 1).to(device)
+        if normals is not None:
+            vectors[...,:3,0] = normals
         obs_x = {'centers': pcd, 'vectors': vectors}
         obs_f = self.linear(obs_f)
         return obs_x, obs_f, obs_pcd_x, obs_pcd_f, inst_f
@@ -298,11 +305,13 @@ class SE3GraspFPSEncoder(SE3GraspPointCloudEncoder):
         output_dim = dim_features
         self.linear = nn.Linear(dim_features, output_dim)
 
-    def compute_fps(self, pcd, pcd_features):
+    def compute_fps(self, pcd, pcd_features, normals=None):
         n_points_out = pcd_features.shape[1] // self.fps_subsampling_factor
         ## Get n points via FPS ##
         out_pcd, out_indices = fps(pcd, K=n_points_out)
         obs_vectors_fps = torch.zeros((3,3))[None,None,:,:].repeat(out_pcd.shape[0], out_pcd.shape[1], 1, 1).to(pcd.device)
+        if normals is not None:
+            obs_vectors_fps[...,:3,0] = normals
         obs_points_fps = {'centers': out_pcd, 'vectors': obs_vectors_fps}
         out_pcd_features = torch.gather(pcd_features, 1, out_indices.unsqueeze(-1).expand(-1, -1, pcd_features.shape[-1]))
         return obs_points_fps, out_pcd_features
@@ -311,12 +320,15 @@ class SE3GraspFPSEncoder(SE3GraspPointCloudEncoder):
         pcd = obs['pcd']
         pcd_features = obs['pcd_features']
         current_gripper = obs['current_gripper']
+        normals = obs.get('normals', None)
         instruction = obs.get('instruction', None)
 
         batch = pcd.shape[0]
         device = pcd.device
 
         vectors = torch.zeros((3,3))[None,None,:,:].repeat(batch, pcd.shape[1], 1, 1).to(device)
+        if normals is not None:
+            vectors[...,:3,0] = normals
         obs_points = {'centers': pcd, 'vectors': vectors}
         obs_features = pcd_features
 
@@ -333,7 +345,7 @@ class SE3GraspFPSEncoder(SE3GraspPointCloudEncoder):
         obs_points['vectors'] = torch.cat((obs_points["vectors"], current_gripper[:,:,:3,:3]), dim=1)
         obs_points['centers'] = torch.cat((obs_points["centers"], current_gripper[:,:,:3,-1]), dim=1)
 
-        obs_points_fps, pcd_features_fps = self.compute_fps(pcd, pcd_features)
+        obs_points_fps, pcd_features_fps = self.compute_fps(pcd, pcd_features, normals)
 
         return obs_points, obs_features, obs_points_fps, pcd_features_fps, instr_features
 

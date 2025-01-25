@@ -158,7 +158,10 @@ class TrainTester(BaseTrainTester):
             relative=bool(self.args.relative_action),
             scaling_factor=args.scaling_factor,
             use_normals=bool(self.args.use_normals),
-            rot_factor=self.args.rot_factor
+            rot_factor=self.args.rot_factor,
+            gripper_depth=self.args.gripper_depth,
+            decoder_depth=self.args.decoder_depth,
+            decoder_dropout=self.args.decoder_dropout
         )
         print("Model parameters:", count_parameters(_model))
 
