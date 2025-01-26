@@ -311,7 +311,8 @@ class SE3GraspFPSEncoder(SE3GraspPointCloudEncoder):
         out_pcd, out_indices = fps(pcd, K=n_points_out)
         obs_vectors_fps = torch.zeros((3,3))[None,None,:,:].repeat(out_pcd.shape[0], out_pcd.shape[1], 1, 1).to(pcd.device)
         if normals is not None:
-            obs_vectors_fps[...,:3,0] = normals
+            normals_fps = torch.gather(normals, 1, out_indices.unsqueeze(-1).expand(-1, -1, normals.shape[-1]))
+            obs_vectors_fps[...,:3,0] = normals_fps
         obs_points_fps = {'centers': out_pcd, 'vectors': obs_vectors_fps}
         out_pcd_features = torch.gather(pcd_features, 1, out_indices.unsqueeze(-1).expand(-1, -1, pcd_features.shape[-1]))
         return obs_points_fps, out_pcd_features

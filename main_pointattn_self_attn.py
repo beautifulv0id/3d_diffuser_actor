@@ -192,6 +192,7 @@ class TrainTester(BaseTrainTester):
             sample["trajectory"],
             sample["rgbs"],
             sample["pcds"],
+            sample["normals"],
             sample["instr"],
             curr_gripper
         )

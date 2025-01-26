@@ -81,7 +81,7 @@ def load_models(args):
             nhist=args.num_history,
             relative=bool(args.relative_action),
             lang_enhanced=bool(args.lang_enhanced),
-        )
+        ).to(device)
     elif args.test_model == "act3d":
         model = Act3D(
             backbone=args.backbone,
@@ -116,7 +116,7 @@ def load_models(args):
             diffusion_timesteps=args.diffusion_timesteps,
             nhist=args.num_history,
             relative=bool(args.relative_action)
-        )
+        ).to(device)
     elif args.test_model == "pointattn_self_attn":
         model = SE3FlowMatchingSelfAttn(
             backbone=args.backbone,
@@ -128,7 +128,7 @@ def load_models(args):
             diffusion_timesteps=args.diffusion_timesteps,
             nhist=args.num_history,
             relative=bool(args.relative_action)
-        )
+        ).to(device)
     else:
         raise NotImplementedError
 

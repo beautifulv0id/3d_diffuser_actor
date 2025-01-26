@@ -11,11 +11,11 @@ verbose=1
 single_task_gripper_loc_bounds=0
 cameras="left_shoulder,right_shoulder,wrist,front"
 seed=0
-log_dir="train_logs/2025.01.22/20.45.18_Actor_18Peract_100Demo_multitask/diffusion_multitask-C120-B4-lr1e-4-DI1-2-H3-DT100"
+log_dir="train_logs/2025.01.23/19.12.58_PointAttn_18Peract_100Demo_multitask/pointattn_multitask-C120-B32-lr1e-4-DI1-2-H3-DT100"
 checkpoint=$log_dir/best.pth
 hyper_params_file=$log_dir/hparams.json
 action_dim=8
-test_model="pointattn_self_attn"
+test_model="pointattn"
 num_ckpts=${#tasks[@]}
 
 # Maximum number of parallel processes
