@@ -49,6 +49,27 @@ class SE3GraspVectorField(ModuleAttrMixin):
         return self.out_fn(out), self.grasp_out_fn(out).sigmoid()
     
 
+class SE3GraspVectorFieldLangEnhanced(SE3GraspVectorField):
+    def __init__(self,
+                 encoder,
+                 decoder,
+                 latent_dim=64,
+                 output_dim=6
+                 ):
+        super(SE3GraspVectorFieldLangEnhanced, self).__init__(encoder, decoder, latent_dim, output_dim)
+
+    def forward_act(self, x):
+        act_x, act_f = self.encoder.encode_act(x['act'])
+        time_emb = self.encoder.encode_time(x['time'])
+        act_x['time'] = time_emb
+
+        obs_f, act_f = self.encoder.combine_time(self.obs_f, act_f, time_emb)
+        if self.inst_f is not None:
+            act_f = self.encoder.action_language_attention(act_f, self.inst_f)
+
+        geo = {'query':act_x, 'key':self.obs_x}
+        out = self.decoder(tgt = act_f, memory = obs_f, geometric_args = geo, lang_memory = self.inst_f)
+        return self.out_fn(out), self.grasp_out_fn(out).sigmoid()
 
 
 class SE3GraspVectorFieldSelfAttn(SE3GraspVectorField):

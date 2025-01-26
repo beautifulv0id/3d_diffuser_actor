@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from geo3dattn.model.ursa_transformer.ursa_transformer import URSATransformerEncoder, URSATransformer
+from diffuser_actor.utils.layers import ParallelAttention
 
 class SE3PCDSelfAttnDecoder(nn.Module):
     def __init__(self, embedding_dim, x1_depth=2, s_depth=2, x2_depth=2, nhead=8, dropout=0.2):
@@ -29,3 +30,33 @@ class SE3PCDSelfAttnDecoder(nn.Module):
         out = self.cross_attn2(tgt, cross_memory, geometric_args=geometric_args)
 
         return out
+    
+
+class LangEnhancedURSADecoder(nn.Module):
+
+    def __init__(self, d_model, nhead, num_layers, dropout=0.0, save_attn=False, pickplace_attn=False, distance_scale=1.0):
+        super().__init__(d_model, nhead, num_layers, dropout=0.0, save_attn=False, pickplace_attn=False, distance_scale=1.0)   
+        self.ursa_layer = nn.ModuleList() 
+        self.lang_layer = nn.ModuleList()
+        for _ in range(num_layers):
+            self.ursa_layer.append(URSATransformer(d_model=d_model, nhead=nhead, num_layers=1, dropout=dropout, distance_scale=distance_scale))
+            self.lang_layer.append(ParallelAttention(
+            num_layers=1,
+            d_model=d_model, n_heads=nhead,
+            self_attention1=False, self_attention2=False,
+            cross_attention1=True, cross_attention2=False
+        ))
+            
+    def forward(self, tgt, memory, lang_memory, geometric_args):
+        tgt_len = tgt.size(1)
+        for ursa_layer, lang_layer in zip(self.ursa_layer, self.lang_layer):
+            tgt = ursa_layer(tgt, memory, geometric_args=geometric_args)
+            feats = torch.cat([tgt, memory], dim=1)
+            feats, _ = self.vl_attention(
+                seq1=feats, seq1_key_padding_mask=None,
+                seq2=lang_memory, seq2_key_padding_mask=None,
+                seq1_pos=None, seq2_pos=None,
+                seq1_sem_pos=None, seq2_sem_pos=None
+            )
+            tgt, memory = feats[:,:tgt_len], feats[:,tgt_len:]
+        return tgt
