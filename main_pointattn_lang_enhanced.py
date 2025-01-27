@@ -16,7 +16,7 @@ from torch.nn import functional as F
 
 from datasets.dataset_engine import RLBenchDataset
 from engine import BaseTrainTester
-from action_flow.se3_flow_matching import SE3FlowMatching
+from action_flow.se3_flow_matching_lang_enhanced import SE3FlowMatchingLangEnhanced
 
 from utils.common_utils import (
     load_instructions, count_parameters, get_gripper_loc_bounds
@@ -82,6 +82,7 @@ class Arguments(tap.Tap):
     decoder_depth: int = 4
     decoder_dropout: float = 0.2
     distance_scale: float = 1.0
+    use_adaln: int = 0
 
 class TrainTester(BaseTrainTester):
     """Train/test a trajectory optimization algorithm."""
@@ -148,7 +149,7 @@ class TrainTester(BaseTrainTester):
     def get_model(self):
         """Initialize the model."""
         # Initialize model with arguments
-        _model = SE3FlowMatching(
+        _model = SE3FlowMatchingLangEnhanced(
             backbone=self.args.backbone,
             image_size=tuple(int(x) for x in self.args.image_size.split(",")),
             embedding_dim=self.args.embedding_dim,
@@ -163,7 +164,8 @@ class TrainTester(BaseTrainTester):
             gripper_depth=self.args.gripper_depth,
             decoder_depth=self.args.decoder_depth,
             decoder_dropout=self.args.decoder_dropout,
-            distance_scale=self.args.distance_scale
+            distance_scale=self.args.distance_scale,
+            use_adaln=bool(self.args.use_adaln)
         )
         print("Model parameters:", count_parameters(_model))
 

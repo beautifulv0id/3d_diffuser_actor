@@ -9,12 +9,11 @@ from diffuser_actor.utils.utils import (
 from action_flow.utils.geometry import se3_from_rot_pos
 from action_flow.utils.encoder import SE3GraspPointCloudEncoder, FeaturePCDEncoder
 from action_flow.utils.decoder import LangEnhancedURSADecoder
-from action_flow.utils.se3_grasp_vector_field import SE3GraspVectorField
+from action_flow.utils.se3_grasp_vector_field import SE3GraspVectorFieldLangEnhanced
 
 from geo3dattn.policy.se3_flowmatching.common.se3_flowmatching import RectifiedLinearFlow
-from geo3dattn.model.ursa_transformer.ursa_transformer import URSATransformer
 
-class SE3FlowMatching(nn.Module):
+class SE3FlowMatchingLangEnhanced(nn.Module):
 
     def __init__(self,
                  backbone="clip",
@@ -31,7 +30,8 @@ class SE3FlowMatching(nn.Module):
                  gripper_depth=2,
                  decoder_depth=4,
                  decoder_dropout=0.2,
-                 distance_scale=1.0
+                 distance_scale=1.0,
+                 use_adaln=False
                  ):
         super().__init__()
         self._quaternion_format = quaternion_format
@@ -50,8 +50,13 @@ class SE3FlowMatching(nn.Module):
             n_steps_inf=diffusion_timesteps,
             nhist=nhist,
         )
-        decoder = LangEnhancedURSADecoder(d_model=embedding_dim, nhead=8, num_layers=decoder_depth, dropout=decoder_dropout, distance_scale=distance_scale)
-        self.model = SE3GraspVectorField(
+        decoder = LangEnhancedURSADecoder(d_model=embedding_dim, 
+                                          nhead=8, num_layers=decoder_depth, 
+                                          dropout=decoder_dropout, 
+                                          distance_scale=distance_scale,
+                                        use_adaln=use_adaln
+                                          )
+        self.model = SE3GraspVectorFieldLangEnhanced(
             encoder=encoder, 
             decoder=decoder, 
             latent_dim=embedding_dim)

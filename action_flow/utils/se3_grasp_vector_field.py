@@ -68,7 +68,7 @@ class SE3GraspVectorFieldLangEnhanced(SE3GraspVectorField):
             act_f = self.encoder.action_language_attention(act_f, self.inst_f)
 
         geo = {'query':act_x, 'key':self.obs_x}
-        out = self.decoder(tgt = act_f, memory = obs_f, geometric_args = geo, lang_memory = self.inst_f)
+        out = self.decoder(tgt = act_f, memory = obs_f, lang_memory = self.inst_f, geometric_args = geo, diff_ts = time_emb)
         return self.out_fn(out), self.grasp_out_fn(out).sigmoid()
 
 
