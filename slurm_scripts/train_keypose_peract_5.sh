@@ -26,7 +26,7 @@ quaternion_format=xyzw
 
 CUDA_LAUNCH_BLOCKING=1 WANDB_PROJECT=3d_diffuser_actor_debug torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     main_trajectory.py \
-    --tasks stack_cups \
+    --tasks push_buttons \
     --dataset $dataset \
     --valset $valset \
     --instructions /home/share/3D_attn_felix/rlbench_instructions/instructions.pkl \
