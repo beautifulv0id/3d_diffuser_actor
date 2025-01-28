@@ -8,8 +8,8 @@ from diffuser_actor.utils.utils import (
 )
 from action_flow.utils.geometry import se3_from_rot_pos
 from action_flow.utils.encoder import FeaturePCDEncoder
-from action_flow.utils.ipa_encoder import SE3IPAGraspPointCloudEncoder
-from action_flow.utils.decoder import LangEnhancedURSADecoder
+from action_flow.ipa.encoder import SE3IPAGraspPointCloudEncoder
+from action_flow.ipa.decoder import LangEnhancedIPADecoder
 from action_flow.utils.se3_grasp_vector_field import SE3GraspVectorFieldLangEnhanced
 
 from geo3dattn.policy.se3_flowmatching.common.se3_flowmatching import RectifiedLinearFlow
@@ -51,10 +51,8 @@ class SE3FlowMatchingLangEnhancedIPA(nn.Module):
             n_steps_inf=diffusion_timesteps,
             nhist=nhist,
         )
-        decoder = LangEnhancedURSADecoder(d_model=embedding_dim, 
+        decoder = LangEnhancedIPADecoder(d_model=embedding_dim, 
                                           nhead=8, num_layers=decoder_depth, 
-                                          dropout=decoder_dropout, 
-                                          distance_scale=distance_scale,
                                         use_adaln=use_adaln
                                           )
         self.model = SE3GraspVectorFieldLangEnhanced(

@@ -4,7 +4,29 @@ import torch.nn.functional as F
 from einops import rearrange, repeat
 from torch.cuda.amp import autocast
 from contextlib import contextmanager
-from diffuser_actor.utils.layers import AdaLN
+
+
+class AdaLN(nn.Module):
+
+    def __init__(self, embedding_dim):
+        super().__init__()
+        self.modulation = nn.Sequential(
+             nn.SiLU(), nn.Linear(embedding_dim, 2 * embedding_dim, bias=True)
+        )
+        nn.init.constant_(self.modulation[-1].weight, 0)
+        nn.init.constant_(self.modulation[-1].bias, 0)
+
+    def forward(self, x, t):
+        """
+        Args:
+            x: A tensor of shape (N, B, C)
+            t: A tensor of shape (B, C)
+        """
+        scale, shift = self.modulation(t).chunk(2, dim=-1)  # (B, C), (B, C)
+        x = x * (1 + scale) + shift
+        return x
+
+
 
 def exists(val):
     return val is not None
@@ -88,12 +110,15 @@ class InvariantPointAttention(nn.Module):
         else:
             tgt = tgt
         tgt, b, h, eps = tgt, tgt.shape[0], self.heads, self.eps
-        if memory is None:
-            memory=tgt
         query_centers = geometric_args['query']['centers']
         query_vectors = geometric_args['query']['vectors']
-        key_centers = geometric_args['key']['centers']
-        key_vectors = geometric_args['key']['vectors']
+        if memory is None:
+            memory=tgt
+            key_centers = geometric_args['query']['centers']
+            key_vectors = geometric_args['query']['vectors']
+        else:
+            key_centers = geometric_args['key']['centers']
+            key_vectors = geometric_args['key']['vectors']
 
         # get queries, keys, values for scalar and point (coordinate-aware) attention pathways
         q_scalar, k_scalar, v_scalar = self.to_scalar_q(tgt), self.to_scalar_k(memory), self.to_scalar_v(memory)
