@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from geo3dattn.model.ursa_transformer.ursa_transformer import URSATransformerEncoder, URSATransformer
+from diffuser_actor.utils.layers import ParallelAttention
 
 class SE3PCDSelfAttnDecoder(nn.Module):
     def __init__(self, embedding_dim, x1_depth=2, s_depth=2, x2_depth=2, nhead=8, dropout=0.2):
