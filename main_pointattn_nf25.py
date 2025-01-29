@@ -16,7 +16,7 @@ from torch.nn import functional as F
 
 from datasets.dataset_engine import RLBenchDataset
 from engine import BaseTrainTester
-from action_flow.se3_flow_matching_lang_enhanced import SE3FlowMatching
+from action_flow.se3_flow_matching_lang_enhanced import SE3FlowMatchingLangEnhanced as SE3FlowMatching
 
 from utils.common_utils import (
     load_instructions, count_parameters, get_gripper_loc_bounds

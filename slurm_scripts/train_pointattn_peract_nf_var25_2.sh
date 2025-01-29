@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -t 24:00:00
+#SBATCH -t 48:00:00
 #SBATCH -c 6
 #SBATCH --mem=32G
 #SBATCH -p gpu
@@ -23,7 +23,7 @@ dense_interpolation=1
 interpolation_length=2
 num_history=3
 diffusion_timesteps=100
-B=12
+B=6
 C=120
 ngpus=$(python3 scripts/helper/count_cuda_devices.py)
 quaternion_format=xyzw
@@ -33,7 +33,7 @@ CUDA_LAUNCH_BLOCKING=1 WANDB_PROJECT=3d_diffuser_actor_debug torchrun --nproc_pe
     --tasks stack_cups \
     --dataset $dataset \
     --valset $valset \
-    --instructions /home/share/3D_attn_felix/rlbench_instructions/instructions.pkl \
+    --instructions /home/share/3D_attn_felix/peract/instructions.pkl \
     --gripper_loc_bounds tasks/18_peract_tasks_location_bounds.json \
     --num_workers 1 \
     --train_iters 600000 \

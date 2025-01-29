@@ -25,7 +25,7 @@ class SE3FlowMatchingLangEnhanced(nn.Module):
                  nhist=3,
                  relative=False,
                  scaling_factor=3.0,
-                 rot_factor=2.0,
+                 rot_factor=1.0,
                  use_normals=False,
                  gripper_depth=2,
                  decoder_depth=4,
