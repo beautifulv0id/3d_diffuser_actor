@@ -135,7 +135,6 @@ def load_models(args):
             backbone=args.backbone,
             image_size=tuple(int(x) for x in args.image_size.split(",")),
             embedding_dim=args.embedding_dim,
-            fps_subsampling_factor=args.fps_subsampling_factor,
             gripper_loc_bounds=gripper_loc_bounds,
             quaternion_format=args.quaternion_format,
             diffusion_timesteps=args.diffusion_timesteps,
@@ -148,7 +147,7 @@ def load_models(args):
             decoder_dropout=args.decoder_dropout,
             distance_scale=args.distance_scale,
             use_adaln=args.use_adaln
-        )
+        ).to(device)
     else:
         raise NotImplementedError
 

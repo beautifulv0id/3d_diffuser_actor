@@ -238,6 +238,16 @@ class Actioner:
                     gripper[..., :7],
                     run_inference=True
                 )
+            elif self._test_model == 'pointattn_lang_enhanced':
+                output["trajectory"] = self._policy(
+                    fake_traj,
+                    rgbs[:, -1],
+                    pcds[:, -1],
+                    None,
+                    self._instr,
+                    gripper[..., :7],
+                    run_inference=True
+                )
             else:
                 output["trajectory"] = self._policy(
                     fake_traj,
