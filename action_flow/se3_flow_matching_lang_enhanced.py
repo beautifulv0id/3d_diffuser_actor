@@ -33,7 +33,8 @@ class SE3FlowMatchingLangEnhanced(nn.Module):
                  decoder_dropout=0.2,
                  distance_scale=1.0,
                  use_adaln=False,
-                 fps_subsampling_factor=1
+                 fps_subsampling_factor=1,
+                 gripper_history_as_points=False,
                  ):
         super().__init__()
         self._quaternion_format = quaternion_format
@@ -52,6 +53,7 @@ class SE3FlowMatchingLangEnhanced(nn.Module):
             nheads=8,
             n_steps_inf=diffusion_timesteps,
             nhist=nhist,
+            gripper_history_as_points=gripper_history_as_points
         )
         decoder = LangEnhancedURSADecoder(d_model=embedding_dim, 
                                           nhead=8, num_layers=decoder_depth, 

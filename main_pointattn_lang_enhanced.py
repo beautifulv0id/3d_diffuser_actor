@@ -86,6 +86,7 @@ class Arguments(tap.Tap):
     distance_scale: float = 1.0
     use_adaln: int = 0
     fps_subsampling_factor: int = 1
+    gripper_history_as_points: int = 0
 
 class TrainTester(BaseTrainTester):
     """Train/test a trajectory optimization algorithm."""
@@ -132,9 +133,6 @@ class TrainTester(BaseTrainTester):
             rot_noise=self.args.rot_noise,
             pos_noise=self.args.pos_noise,
             quaternion_format=self.args.quaternion_format,
-            rot_noise=self.args.rot_noise,
-            pos_noise=self.args.pos_noise,
-            quaternion_format=self.args.quaternion_format,
         )
         test_dataset = RLBenchDataset(
             root=self.args.valset,
@@ -155,9 +153,6 @@ class TrainTester(BaseTrainTester):
             rot_noise=self.args.rot_noise,
             pos_noise=self.args.pos_noise,
             quaternion_format=self.args.quaternion_format,
-            rot_noise=self.args.rot_noise,
-            pos_noise=self.args.pos_noise,
-            quaternion_format=self.args.quaternion_format,
         )
         return train_dataset, test_dataset
 
@@ -175,16 +170,14 @@ class TrainTester(BaseTrainTester):
             relative=bool(self.args.relative_action),
             scaling_factor=args.scaling_factor,
             use_normals=bool(self.args.use_normals),
-            rot_noise=self.args.rot_noise,
-            pos_noise=self.args.pos_noise,
-            quaternion_format=self.args.quaternion_format,
             rot_factor=self.args.rot_factor,
             gripper_depth=self.args.gripper_depth,
             decoder_depth=self.args.decoder_depth,
             decoder_dropout=self.args.decoder_dropout,
             distance_scale=self.args.distance_scale,
             use_adaln=bool(self.args.use_adaln),
-            fps_subsampling_factor=self.args.fps_subsampling_factor
+            fps_subsampling_factor=self.args.fps_subsampling_factor,
+            gripper_history_as_points=bool(self.args.gripper_history_as_points)
         )
         print("Model parameters:", count_parameters(_model))
 
