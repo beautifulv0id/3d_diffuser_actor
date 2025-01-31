@@ -60,8 +60,8 @@ class RLBenchDataset(Dataset):
         interpolation_length=100,
         relative_action=False,
         use_normals=False,
-        rot_noise=0.01,
-        pos_noise=0.01,
+        rot_noise=0.0,
+        pos_noise=0.0,
         quaternion_format='xyzw',
     ):
         self._cache = {}
