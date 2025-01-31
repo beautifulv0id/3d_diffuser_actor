@@ -66,7 +66,7 @@ class SE3FlowMatchingSelfAttn(nn.Module):
         ## Flow Model ##
         self.scaling_factor = torch.tensor(scaling_factor, requires_grad=False)
         self.flow = RectifiedLinearFlow(n_action_steps=1, num_steps=diffusion_timesteps)
-        std = torch.Tensor([2.0, 2.0, 2.0, torch.pi, torch.pi, torch.pi])[None, ...]
+        std = torch.Tensor([1.0, 1.0, 1.0, torch.pi, torch.pi, torch.pi])[None, ...]
         mean = torch.Tensor([0, 0, 0, 0, 0, 0])[None, ...]
         self.flow.set_mean_std(mean, std)
 
