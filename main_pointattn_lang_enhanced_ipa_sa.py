@@ -65,6 +65,8 @@ class Arguments(tap.Tap):
     max_episode_length: int = 5  # -1 for no limit
 
     # Data augmentations
+    rot_noise: float = 0.0
+    pos_noise: float = 0.0
     image_rescale: str = "0.75,1.25"  # (min, max), "1.0,1.0" for no rescaling
 
     # Model
@@ -127,6 +129,9 @@ class TrainTester(BaseTrainTester):
             dense_interpolation=bool(self.args.dense_interpolation),
             interpolation_length=self.args.interpolation_length,
             use_normals=bool(self.args.use_normals),
+            rot_noise=self.args.rot_noise,
+            pos_noise=self.args.pos_noise,
+            quaternion_format=self.args.quaternion_format,
         )
         test_dataset = RLBenchDataset(
             root=self.args.valset,
@@ -144,6 +149,9 @@ class TrainTester(BaseTrainTester):
             dense_interpolation=bool(self.args.dense_interpolation),
             interpolation_length=self.args.interpolation_length,
             use_normals=bool(self.args.use_normals),
+            rot_noise=self.args.rot_noise,
+            pos_noise=self.args.pos_noise,
+            quaternion_format=self.args.quaternion_format,
         )
         return train_dataset, test_dataset
 
@@ -162,6 +170,9 @@ class TrainTester(BaseTrainTester):
             relative=bool(self.args.relative_action),
             scaling_factor=args.scaling_factor,
             use_normals=bool(self.args.use_normals),
+            rot_noise=self.args.rot_noise,
+            pos_noise=self.args.pos_noise,
+            quaternion_format=self.args.quaternion_format,
             rot_factor=self.args.rot_factor,
             gripper_depth=self.args.gripper_depth,
             decoder_depth=self.args.decoder_depth,

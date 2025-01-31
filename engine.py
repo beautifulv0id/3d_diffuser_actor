@@ -31,7 +31,7 @@ class BaseTrainTester:
             self.wandb_run = wandb.init(
                 dir=str(args.log_dir),
                 config=args,
-                name=str(args.name)
+                name=str(args.run_log_dir)
             )
 
     @staticmethod

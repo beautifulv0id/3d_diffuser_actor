@@ -54,6 +54,8 @@ class Arguments(tap.Tap):
     max_episode_length: int = 5  # -1 for no limit
 
     # Data augmentations
+    rot_noise: float = 0.0
+    pos_noise: float = 0.0
     image_rescale: str = "0.75,1.25"  # (min, max), "1.0,1.0" for no rescaling
 
     # Loss
