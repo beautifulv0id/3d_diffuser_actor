@@ -354,12 +354,11 @@ class FeaturePCDEncoder(ModuleAttrMixin):
     
     def __init__(self,
                  backbone="clip",
-                 image_size=(256, 256),
+                 feature_res="res3",
                  embedding_dim=60):
         super().__init__()
 
-        assert image_size in [(128, 128), (256, 256)]
-
+        assert feature_res in ["res1", "res2", "res3"], "Feature resolution must be either res1, res2 or res3"
         
         # 3D relative positional embeddings
         # Frozen backbone
@@ -372,11 +371,13 @@ class FeaturePCDEncoder(ModuleAttrMixin):
         for p in self.backbone.parameters():
             p.requires_grad = False
 
-        if image_size == (128, 128):
-            self.feature_res = "res2"
+
+        self.feature_res = feature_res
+        if self.feature_res == "res1":
+            self.out_dim = 64
+        elif self.feature_res == "res2":
             self.out_dim = 256
-        elif image_size == (256, 256):
-            self.feature_res = "res3"
+        elif self.feature_res == "res3":
             self.out_dim = 512
 
         self.to_out = nn.Linear(self.out_dim, embedding_dim)

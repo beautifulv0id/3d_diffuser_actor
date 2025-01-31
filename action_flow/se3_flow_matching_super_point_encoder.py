@@ -20,7 +20,7 @@ class SE3FlowMatchingSuperPointEncoder(nn.Module):
 
     def __init__(self,
                  backbone="clip",
-                 image_size=(256, 256),
+                 feature_res="res3",
                  embedding_dim=60,
                  fps_subsampling_factor=5,
                  gripper_loc_bounds=None,
@@ -34,7 +34,7 @@ class SE3FlowMatchingSuperPointEncoder(nn.Module):
         self._relative = relative
         self.feature_pcd_encoder = FeaturePCDEncoder(
             backbone=backbone,
-            image_size=image_size,
+            feature_res=feature_res,
             embedding_dim=embedding_dim
             )
         encoder = SE3GraspPointCloudSuperEncoder(

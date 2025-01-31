@@ -17,7 +17,7 @@ class SE3FlowMatching(nn.Module):
 
     def __init__(self,
                  backbone="clip",
-                 image_size=(256, 256),
+                 feature_res="res3",
                  embedding_dim=60,
                  gripper_loc_bounds=None,
                  quaternion_format='xyzw',
@@ -39,7 +39,7 @@ class SE3FlowMatching(nn.Module):
         self._rot_factor = rot_factor
         self.feature_pcd_encoder = FeaturePCDEncoder(
             backbone=backbone,
-            image_size=image_size,
+            feature_res=feature_res,
             embedding_dim=embedding_dim
             )
         encoder = SE3GraspPointCloudEncoder(

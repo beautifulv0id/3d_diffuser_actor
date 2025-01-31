@@ -27,7 +27,7 @@ import wandb
 
 class Arguments(tap.Tap):
     cameras: Tuple[str, ...] = ("wrist", "left_shoulder", "right_shoulder")
-    image_size: str = "256,256"
+    feature_res: str = "res3"
     max_episodes_per_task: int = 100
     instructions: Optional[Path] = "instructions.pkl"
     seed: int = 0
@@ -144,7 +144,7 @@ class TrainTester(BaseTrainTester):
         # Initialize model with arguments
         _model = SE3FlowMatchingSuperPointEncoder(
             backbone=self.args.backbone,
-            image_size=tuple(int(x) for x in self.args.image_size.split(",")),
+            feature_res=args.feature_res,
             embedding_dim=self.args.embedding_dim,
             fps_subsampling_factor=self.args.fps_subsampling_factor,
             gripper_loc_bounds=self.args.gripper_loc_bounds,
