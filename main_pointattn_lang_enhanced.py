@@ -83,6 +83,7 @@ class Arguments(tap.Tap):
     decoder_dropout: float = 0.2
     distance_scale: float = 1.0
     use_adaln: int = 0
+    fps_subsampling_factor: int = 1
 
 class TrainTester(BaseTrainTester):
     """Train/test a trajectory optimization algorithm."""
@@ -165,7 +166,8 @@ class TrainTester(BaseTrainTester):
             decoder_depth=self.args.decoder_depth,
             decoder_dropout=self.args.decoder_dropout,
             distance_scale=self.args.distance_scale,
-            use_adaln=bool(self.args.use_adaln)
+            use_adaln=bool(self.args.use_adaln),
+            fps_subsampling_factor=self.args.fps_subsampling_factor
         )
         print("Model parameters:", count_parameters(_model))
 

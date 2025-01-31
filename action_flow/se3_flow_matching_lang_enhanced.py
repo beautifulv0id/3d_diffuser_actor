@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import pytorch3d.ops.sample_farthest_points as fps
 from diffuser_actor.utils.utils import (
     normalise_quat,
     matrix_to_quaternion,
@@ -31,13 +32,15 @@ class SE3FlowMatchingLangEnhanced(nn.Module):
                  decoder_depth=4,
                  decoder_dropout=0.2,
                  distance_scale=1.0,
-                 use_adaln=False
+                 use_adaln=False,
+                 fps_subsampling_factor=1
                  ):
         super().__init__()
         self._quaternion_format = quaternion_format
         self._relative = relative
         self._use_normals = use_normals
         self._rot_factor = rot_factor
+        self._fps_subsampling_factor = fps_subsampling_factor
         self.feature_pcd_encoder = FeaturePCDEncoder(
             backbone=backbone,
             feature_res=feature_res,
@@ -157,6 +160,18 @@ class SE3FlowMatchingLangEnhanced(nn.Module):
         curr_gripper[..., :3] = curr_gripper[..., :3] - center.view(bs, 1, 3)
         return pcd, curr_gripper
 
+    def fps_subsampling(self, feature_obs, pcd_obs, normal_obs): 
+        n_points_out = pcd_obs.shape[1] // self._fps_subsampling_factor
+        ## Get n points via FPS ##
+        pcd_obs, out_indices = fps(pcd_obs, K=n_points_out)
+
+        ## Subsample features and normals ##
+        feature_obs = torch.gather(feature_obs, 1, out_indices.unsqueeze(-1).expand(-1, -1, feature_obs.shape[-1]))
+        if self._use_normals:
+            normal_obs = torch.gather(normal_obs, 1, out_indices.unsqueeze(-1).expand(-1, -1, normal_obs.shape[-1]))
+        
+        return feature_obs, pcd_obs, normal_obs
+
     def forward(
         self,
         gt_trajectory,
@@ -182,6 +197,8 @@ class SE3FlowMatchingLangEnhanced(nn.Module):
             The model converts it to 6D internally if needed.
         """
         feature_obs, pcd_obs, normal_obs = self.feature_pcd_encoder(rgb_obs, pcd_obs, normal_obs)
+        if self._fps_subsampling_factor > 1:
+            feature_obs, pcd_obs, normal_obs = self.fps_subsampling(feature_obs, pcd_obs, normal_obs)
         if self._relative:
             pcd_obs, curr_gripper = self.convert2rel(pcd_obs, curr_gripper)
         if gt_trajectory is not None:
