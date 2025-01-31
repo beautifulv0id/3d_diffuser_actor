@@ -8,9 +8,33 @@ from time import time
 import torch
 import numpy as np
 from torch.utils.data import Dataset
+from pytorch3d.transforms import quaternion_to_matrix, matrix_to_quaternion
+from utils.so3_util import normal_so3
 
 from .utils import loader, Resize, TrajectoryInterpolator
 
+def add_pos_noise(gripper_history, pos_noise_scale):
+    gripper_history = gripper_history.clone()
+    noise = torch.randn_like(gripper_history[...,:3]) * pos_noise_scale
+    gripper_history[...,:3] += noise
+    return gripper_history
+
+def add_rot_noise(trajectory, rot_noise_scale, quaternion_format='xyzw'):
+    trajectory = trajectory.clone()
+    l, T, c = trajectory.shape
+    trajectory = trajectory.view(-1, c)
+    q = trajectory[..., 3:7]
+    noise = normal_so3(q.shape[0], rot_noise_scale)
+    if quaternion_format == 'xyzw':
+        q = q[..., (3, 0, 1, 2)]
+    rot = quaternion_to_matrix(q)
+    rot = torch.bmm(rot, noise)
+    q = matrix_to_quaternion(rot)
+    if quaternion_format == 'xyzw':
+        q = q[..., (1, 2, 3, 0)]
+    trajectory[..., 3:7] = q
+    trajectory = trajectory.view(l, T, c)
+    return trajectory
 
 class RLBenchDataset(Dataset):
     """RLBench dataset."""
@@ -35,7 +59,10 @@ class RLBenchDataset(Dataset):
         dense_interpolation=False,
         interpolation_length=100,
         relative_action=False,
-        use_normals=False
+        use_normals=False,
+        rot_noise=0.01,
+        pos_noise=0.01,
+        quaternion_format='xyzw',
     ):
         self._cache = {}
         self._cache_size = cache_size
@@ -46,6 +73,9 @@ class RLBenchDataset(Dataset):
         self._taskvar = taskvar
         self._return_low_lvl_trajectory = return_low_lvl_trajectory
         self._use_normals = use_normals
+        self._rot_noise = rot_noise
+        self._pos_noise = pos_noise
+        self._quaternion_format = quaternion_format
         if isinstance(root, (Path, str)):
             root = [Path(root)]
         self._root = [Path(r).expanduser() for r in root]
@@ -248,6 +278,13 @@ class RLBenchDataset(Dataset):
                 normals_magnitude = np.linalg.norm(normals, axis=2, keepdims=True)
                 normals_magnitude[normals_magnitude == 0] = 1
                 normals = normals / normals_magnitude
+
+            # Add noise to gripper history
+            if self._pos_noise > 0:
+                gripper_history = add_pos_noise(gripper_history, self._pos_noise)
+            if self._rot_noise > 0:
+                gripper_history = add_rot_noise(gripper_history, self._rot_noise, self._quaternion_format)
+
 
         ret_dict = {
             "task": [task for _ in frame_ids],
