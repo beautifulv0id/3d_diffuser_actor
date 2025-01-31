@@ -23,7 +23,7 @@ from diffuser_actor.utils.utils import (
     quaternion_to_matrix
 )
 
-from geo3dattn.policy.se3_flowmatching.common.se3_flowmatching import EuclideanLinearFlow
+from geo3dattn.policy.se3_flowmatching.common.euclidean_flowmatching import EuclideanLinearFlow
 
 class DiffuserActorFlowMatching(nn.Module):
 
