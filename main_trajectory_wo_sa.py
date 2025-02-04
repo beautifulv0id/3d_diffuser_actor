@@ -34,6 +34,7 @@ class Arguments(tap.Tap):
     tasks: Tuple[str, ...]
     variations: Tuple[int, ...] = (0,)
     checkpoint: Optional[Path] = None
+    resume: int = 1
     accumulate_grad_batches: int = 1
     val_freq: int = 500
     gripper_loc_bounds: Optional[str] = None

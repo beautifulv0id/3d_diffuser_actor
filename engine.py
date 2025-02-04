@@ -14,15 +14,37 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import trange
 import wandb
-
+import json
+from pathlib import Path
+import argparse
+import tap
 
 class BaseTrainTester:
     """Basic train/test class to be inherited."""
 
-    def __init__(self, args):
+    def __init__(self, args: tap.Tap):
         """Initialize."""
         if dist.get_rank() == 0:
-            args.save(str(args.log_dir / "hparams.json"))
+            if args.checkpoint and args.resume:
+                file = Path(args.checkpoint).parent / "hparams.json"
+                assert os.path.isfile(args.checkpoint)
+                assert os.path.isfile(file), f"File {file} not found"
+                exclude_keys = ["batch_size", 
+                                "batch_size_val", 
+                                "cache_size", 
+                                "cache_size_val", 
+                                "checkpoint", 
+                                "local_rank", 
+                                "reproducibility", 
+                                "val_freq", 
+                                "val_iters"]
+                args_ = args.__deepcopy__()
+                args_ = args_.load(file)
+                for key in vars(args_):
+                    if key not in exclude_keys:
+                        setattr(args, key, getattr(args_, key))
+            else:
+                args.save(str(args.log_dir / "hparams.json"))
 
         self.args = args
 
@@ -31,7 +53,8 @@ class BaseTrainTester:
             self.wandb_run = wandb.init(
                 dir=str(args.log_dir),
                 config=args,
-                name=str(args.run_log_dir)
+                name=str(args.run_log_dir),
+                resume=bool(args.resume)
             )
 
     @staticmethod
@@ -85,7 +108,7 @@ class BaseTrainTester:
     def get_model():
         """Initialize the model."""
         return None
-
+    
     @staticmethod
     def get_criterion():
         """Get loss criterion for training."""
