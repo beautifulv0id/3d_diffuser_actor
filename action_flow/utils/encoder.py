@@ -88,7 +88,20 @@ class SuperPointEncoder(nn.Module):
 
 
 class SE3GraspPointCloudEncoder(ModuleAttrMixin):
-    def __init__(self, dim_features=128, gripper_depth=3, nheads=4, n_steps_inf=50, nhist=3, num_vis_ins_attn_layers=2, gripper_history_as_points=False):
+    def __init__(self, dim_features=128,
+                    gripper_depth=3,
+                    nheads=4,
+                    n_steps_inf=50,
+                    nhist=3,
+                    num_vis_ins_attn_layers=2,
+                    gripper_history_as_points=False,
+                    feature_type='sinusoid',
+                    use_adaln=True,
+                    use_center_distance=True,
+                    use_center_projection=True,
+                    use_vector_projection=True,
+                    ):
+
         super(SE3GraspPointCloudEncoder, self).__init__()
 
         ## Learnable observation features (Data in Acronym is purely geometrical, no semantics involved)
@@ -98,7 +111,14 @@ class SE3GraspPointCloudEncoder(ModuleAttrMixin):
         self.action_features = nn.Parameter(torch.randn(1, dim_features))
 
         ## Gripper History Encoder ##
-        self.gripper_decoder = URSATransformer(dim_features, nhead=nheads, num_layers=gripper_depth)
+        self.gripper_decoder = URSATransformer(dim_features, 
+                                                nhead=nheads, 
+                                                num_layers=gripper_depth, 
+                                                feature_type=feature_type,
+                                                use_adaln=use_adaln,
+                                                use_center_distance=use_center_distance,
+                                                use_center_projection=use_center_projection,
+                                                use_vector_projection=use_vector_projection)
 
         ## Instruction Encoder ##
         self.instruction_encoder = nn.Linear(512, dim_features)
@@ -310,8 +330,8 @@ class SE3GraspFPSSuperEncoder(SE3GraspPointCloudSuperEncoder):
         return obs_x, obs_f, obs_pcd_x, obs_pcd_f, inst_f
 
 class SE3GraspFPSEncoder(SE3GraspPointCloudEncoder):
-    def __init__(self, dim_features=128, gripper_depth=3, nheads=4, n_steps_inf=50, fps_subsampling_factor=5, nhist=3):
-        super(SE3GraspFPSEncoder, self).__init__(dim_features, gripper_depth, nheads, n_steps_inf, nhist)
+    def __init__(self, dim_features=128, gripper_depth=3, nheads=4, n_steps_inf=50, fps_subsampling_factor=5, nhist=3, feature_type='sinusoid'):
+        super(SE3GraspFPSEncoder, self).__init__(dim_features, gripper_depth, nheads, n_steps_inf, nhist, feature_type=feature_type)
         self.fps_subsampling_factor = fps_subsampling_factor
         output_dim = dim_features
         self.linear = nn.Linear(dim_features, output_dim)

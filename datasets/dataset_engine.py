@@ -62,6 +62,7 @@ class RLBenchDataset(Dataset):
         use_normals=False,
         rot_noise=0.0,
         pos_noise=0.0,
+        pcd_noise=0.0,
         quaternion_format='xyzw',
     ):
         self._cache = {}
@@ -75,6 +76,7 @@ class RLBenchDataset(Dataset):
         self._use_normals = use_normals
         self._rot_noise = rot_noise
         self._pos_noise = pos_noise
+        self._pcd_noise = pcd_noise
         self._quaternion_format = quaternion_format
         if isinstance(root, (Path, str)):
             root = [Path(root)]
@@ -278,6 +280,10 @@ class RLBenchDataset(Dataset):
                 normals_magnitude = np.linalg.norm(normals, axis=2, keepdims=True)
                 normals_magnitude[normals_magnitude == 0] = 1
                 normals = normals / normals_magnitude
+
+            # Add noise to point cloud
+            if self._pcd_noise > 0:
+                pcds = pcds + torch.randn_like(pcds) * self._pcd_noise
 
             # Add noise to gripper history
             if self._pos_noise > 0:

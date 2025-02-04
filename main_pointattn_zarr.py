@@ -67,6 +67,7 @@ class Arguments(tap.Tap):
     # Data augmentations
     rot_noise: float = 0.0
     pos_noise: float = 0.0
+    pcd_noise: float = 0.0
     image_rescale: str = "0.75,1.25"  # (min, max), "1.0,1.0" for no rescaling
 
     # Model

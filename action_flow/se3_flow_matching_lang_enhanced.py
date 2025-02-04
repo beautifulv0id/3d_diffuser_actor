@@ -35,6 +35,10 @@ class SE3FlowMatchingLangEnhanced(nn.Module):
                  use_adaln=False,
                  fps_subsampling_factor=1,
                  gripper_history_as_points=False,
+                 feature_type='sinusoid',
+                 use_center_distance=True,
+                 use_center_projection=True,
+                 use_vector_projection=True,
                  ):
         super().__init__()
         self._quaternion_format = quaternion_format
@@ -53,13 +57,21 @@ class SE3FlowMatchingLangEnhanced(nn.Module):
             nheads=8,
             n_steps_inf=diffusion_timesteps,
             nhist=nhist,
-            gripper_history_as_points=gripper_history_as_points
+            gripper_history_as_points=gripper_history_as_points,
+            feature_type=feature_type,
+            use_adaln=use_adaln,
+            use_center_distance=use_center_distance,
+            use_center_projection=use_center_projection,
+            use_vector_projection=use_vector_projection
         )
         decoder = LangEnhancedURSADecoder(d_model=embedding_dim, 
                                           nhead=8, num_layers=decoder_depth, 
                                           dropout=decoder_dropout, 
                                           distance_scale=distance_scale,
-                                        use_adaln=use_adaln
+                                          use_adaln=use_adaln,
+                                          use_center_distance=use_center_distance,
+                                          use_center_projection=use_center_projection,
+                                          use_vector_projection=use_vector_projection
                                           )
         self.model = SE3GraspVectorFieldLangEnhanced(
             encoder=encoder, 

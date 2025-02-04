@@ -68,6 +68,7 @@ class Arguments(tap.Tap):
     # Data augmentations
     rot_noise: float = 0.0
     pos_noise: float = 0.0
+    pcd_noise: float = 0.0
     image_rescale: str = "0.75,1.25"  # (min, max), "1.0,1.0" for no rescaling
 
     # Model
@@ -88,6 +89,10 @@ class Arguments(tap.Tap):
     use_adaln: int = 0
     fps_subsampling_factor: int = 1
     gripper_history_as_points: int = 0
+    feature_type: str = 'sinusoid'
+    use_center_distance: int = 1,
+    use_center_projection: int = 1,
+    use_vector_projection: int = 1,
 
 class TrainTester(BaseTrainTester):
     """Train/test a trajectory optimization algorithm."""
@@ -133,6 +138,7 @@ class TrainTester(BaseTrainTester):
             use_normals=bool(self.args.use_normals),
             rot_noise=self.args.rot_noise,
             pos_noise=self.args.pos_noise,
+            pcd_noise=self.args.pcd_noise,
             quaternion_format=self.args.quaternion_format,
         )
         test_dataset = RLBenchDataset(
@@ -153,6 +159,7 @@ class TrainTester(BaseTrainTester):
             use_normals=bool(self.args.use_normals),
             rot_noise=self.args.rot_noise,
             pos_noise=self.args.pos_noise,
+            pcd_noise=self.args.pcd_noise,
             quaternion_format=self.args.quaternion_format,
         )
         return train_dataset, test_dataset
@@ -178,7 +185,11 @@ class TrainTester(BaseTrainTester):
             distance_scale=self.args.distance_scale,
             use_adaln=bool(self.args.use_adaln),
             fps_subsampling_factor=self.args.fps_subsampling_factor,
-            gripper_history_as_points=bool(self.args.gripper_history_as_points)
+            gripper_history_as_points=bool(self.args.gripper_history_as_points),
+            feature_type=self.args.feature_type,
+            use_center_distance=bool(self.args.use_center_distance),
+            use_center_projection=bool(self.args.use_center_projection),
+            use_vector_projection=bool(self.args.use_vector_projection),
         )
         print("Model parameters:", count_parameters(_model))
 
