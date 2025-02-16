@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 from geo3dattn.model.common.module_attr_mixin import ModuleAttrMixin
 
@@ -70,6 +71,56 @@ class SE3GraspVectorFieldLangEnhanced(SE3GraspVectorField):
         geo = {'query':act_x, 'key':self.obs_x}
         out = self.decoder(tgt = act_f, memory = obs_f, lang_memory = self.inst_f, geometric_args = geo, diff_ts = time_emb)
         return self.out_fn(out), self.grasp_out_fn(out).sigmoid()
+
+class SE3GraspVectorFieldLangEnhanced10(SE3GraspVectorField):
+    def __init__(self,
+                 encoder,
+                 decoder,
+                 latent_dim=64,
+                 output_dim=6
+                 ):
+        super(SE3GraspVectorFieldLangEnhanced10, self).__init__(encoder, decoder, latent_dim, output_dim)
+
+        self.additional_positions = torch.tensor([[0.0, 0.0, 0.0],
+                                                   [0.0, 0.0, -0.2],
+                                                    [0.0, 0.0, -0.1],
+                                                    [0.0, -0.1, -0.1],
+                                                    [0.0, 0.1, -0.1],
+                                                    [-0.1, 0.0, -0.1],
+                                                    [0.1, 0.0, -0.1],
+                                                  [0.1, 0.1, -0.1],
+                                                  [0.1, -0.1, -0.1],
+                                                  [-0.1, 0.1, -0.1],
+                                                  [-0.1, -0.1, -0.1]], requires_grad=False).unsqueeze(-1)
+        self.num_points = self.additional_positions.shape[0]
+        self.first_call = False
+        self.additional_squeezing = torch.nn.Linear(self.num_points, 1)
+
+    def forward_act(self, x):
+        act_x, act_f = self.encoder.encode_act(x['act'])
+        time_emb = self.encoder.encode_time(x['time'])
+        act_x['time'] = time_emb
+
+        obs_f, act_f = self.encoder.combine_time(self.obs_f, act_f, time_emb)
+        if self.inst_f is not None:
+            act_f = self.encoder.action_language_attention(act_f, self.inst_f)
+
+        if not(self.first_call):
+            self.first_call = True
+            self.additional_positions = self.additional_positions.to(act_x['vectors'].device)
+
+        # BLOW UP THE TENSORS TO ALLOW FOR THE ADDITIONAL ENTRIES
+        act_f = act_f.repeat(1, self.num_points, 1)
+        act_x['centers'] = act_x['centers'].repeat(1, self.num_points, 1)
+        act_x['vectors'] = act_x['vectors'].repeat(1, self.num_points, 1, 1)
+
+        test = torch.matmul(act_x['vectors'], self.additional_positions[None,...]).squeeze(-1)
+        act_x['centers'] = act_x['centers'] + test
+
+        geo = {'query':act_x, 'key':self.obs_x}
+        out = self.decoder(tgt = act_f, memory = obs_f, lang_memory = self.inst_f, geometric_args = geo, diff_ts = time_emb)
+        out_new = torch.movedim(self.additional_squeezing(torch.movedim(out,2,1)), 1, 2)
+        return self.out_fn(out_new), self.grasp_out_fn(out_new).sigmoid()
 
 class SE3GraspVectorFieldSelfAttn(SE3GraspVectorField):
     def __init__(self,
