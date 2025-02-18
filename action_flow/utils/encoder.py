@@ -100,6 +100,7 @@ class SE3GraspPointCloudEncoder(ModuleAttrMixin):
                     use_center_distance=True,
                     use_center_projection=True,
                     use_vector_projection=True,
+                    add_center=True
                     ):
 
         super(SE3GraspPointCloudEncoder, self).__init__()
@@ -118,7 +119,8 @@ class SE3GraspPointCloudEncoder(ModuleAttrMixin):
                                                 use_adaln=use_adaln,
                                                 use_center_distance=use_center_distance,
                                                 use_center_projection=use_center_projection,
-                                                use_vector_projection=use_vector_projection)
+                                                use_vector_projection=use_vector_projection,
+                                                add_center=add_center)
 
         ## Instruction Encoder ##
         self.instruction_encoder = nn.Linear(512, dim_features)
@@ -330,8 +332,29 @@ class SE3GraspFPSSuperEncoder(SE3GraspPointCloudSuperEncoder):
         return obs_x, obs_f, obs_pcd_x, obs_pcd_f, inst_f
 
 class SE3GraspFPSEncoder(SE3GraspPointCloudEncoder):
-    def __init__(self, dim_features=128, gripper_depth=3, nheads=4, n_steps_inf=50, fps_subsampling_factor=5, nhist=3, feature_type='sinusoid'):
-        super(SE3GraspFPSEncoder, self).__init__(dim_features, gripper_depth, nheads, n_steps_inf, nhist, feature_type=feature_type)
+    def __init__(self, 
+                    dim_features=128, 
+                    gripper_depth=3, 
+                    nheads=4, 
+                    n_steps_inf=50, 
+                    fps_subsampling_factor=5, 
+                    nhist=3, 
+                    gripper_history_as_points=False,
+                    feature_type='sinusoid',
+                    use_adaln=True,
+                    use_center_distance=True,
+                    use_center_projection=True,
+                    use_vector_projection=True,
+                    add_center=True
+                    ):
+        super(SE3GraspFPSEncoder, self).__init__(dim_features, gripper_depth, nheads, n_steps_inf, nhist, 
+                                                gripper_history_as_points=gripper_history_as_points,
+                                                feature_type=feature_type,
+                                                use_adaln=use_adaln,
+                                                use_center_distance=use_center_distance,
+                                                use_center_projection=use_center_projection,
+                                                use_vector_projection=use_vector_projection,
+                                                add_center=add_center)
         self.fps_subsampling_factor = fps_subsampling_factor
         output_dim = dim_features
         self.linear = nn.Linear(dim_features, output_dim)
@@ -349,36 +372,8 @@ class SE3GraspFPSEncoder(SE3GraspPointCloudEncoder):
         return obs_points_fps, out_pcd_features
 
     def encode_obs(self, obs):
-        pcd = obs['pcd']
-        pcd_features = obs['pcd_features']
-        current_gripper = obs['current_gripper']
-        normals = obs.get('normals', None)
-        instruction = obs.get('instruction', None)
-
-        batch = pcd.shape[0]
-        device = pcd.device
-
-        vectors = torch.zeros((3,3))[None,None,:,:].repeat(batch, pcd.shape[1], 1, 1).to(device)
-        if normals is not None:
-            vectors[...,:3,0] = normals
-        obs_points = {'centers': pcd, 'vectors': vectors}
-        obs_features = pcd_features
-
-        # pcd - instruction attention
-        if instruction is not None:
-            instr_features = self.encode_instruction(instruction)
-            obs_features = self.vision_language_attention(obs_features, instr_features)
-        else:
-            instr_features = None
-
-        # add gripper features
-        gripper_features = self.encode_gripper(current_gripper, obs_features, obs_points)        
-        obs_features = torch.cat((obs_features, gripper_features), dim=1)
-        obs_points['vectors'] = torch.cat((obs_points["vectors"], current_gripper[:,:,:3,:3]), dim=1)
-        obs_points['centers'] = torch.cat((obs_points["centers"], current_gripper[:,:,:3,-1]), dim=1)
-
-        obs_points_fps, pcd_features_fps = self.compute_fps(pcd, pcd_features, normals)
-
+        obs_points, obs_features, instr_features = super().encode_obs(obs)
+        obs_points_fps, pcd_features_fps = self.compute_fps(obs['pcd'], obs_features, obs.get('normals', None))
         return obs_points, obs_features, obs_points_fps, pcd_features_fps, instr_features
 
 class FeaturePCDEncoder(ModuleAttrMixin):

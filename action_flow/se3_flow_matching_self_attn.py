@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import einops
 from diffuser_actor.utils.encoder import Encoder
 from diffuser_actor.utils.layers import ParallelAttention
+import pytorch3d.ops.sample_farthest_points as fps
 from diffuser_actor.utils.utils import (
     normalise_quat,
     matrix_to_quaternion,
@@ -34,7 +35,15 @@ class SE3FlowMatchingSelfAttn(nn.Module):
                  gripper_depth=2,
                  decoder_depth=2,
                  decoder_dropout=0.2,
-                ):
+                 distance_scale=1.0,
+                 use_adaln=False,
+                 gripper_history_as_points=False,
+                 feature_type='sinusoid',
+                 use_center_distance=True,
+                 use_center_projection=True,
+                 use_vector_projection=True,
+                 add_center=True,
+                 ):
         super().__init__()
         self._quaternion_format = quaternion_format
         self._relative = relative
@@ -50,14 +59,29 @@ class SE3FlowMatchingSelfAttn(nn.Module):
             dim_features=embedding_dim,
             gripper_depth=gripper_depth,
             nheads=8,
-            fps_subsampling_factor=fps_subsampling_factor,
+            n_steps_inf=diffusion_timesteps,
             nhist=nhist,
+            gripper_history_as_points=gripper_history_as_points,
+            feature_type=feature_type,
+            use_adaln=use_adaln,
+            use_center_distance=use_center_distance,
+            use_center_projection=use_center_projection,
+            use_vector_projection=use_vector_projection,
+            add_center=add_center
         )
         decoder = SE3PCDSelfAttnDecoder(embedding_dim=embedding_dim,
                                          x1_depth=1,
                                          s_depth=decoder_depth,
                                          x2_depth=1,
-                                         dropout=decoder_dropout)
+                                         dropout=decoder_dropout,
+                                         distance_scale=distance_scale,
+                                         use_adaln=use_adaln,
+                                         use_center_distance=use_center_distance,
+                                         use_center_projection=use_center_projection,
+                                         use_vector_projection=use_vector_projection,
+                                         add_center=add_center
+                                          )
+
         self.model = SE3GraspVectorFieldSelfAttn(
             encoder=encoder, 
             decoder=decoder, 
@@ -159,6 +183,18 @@ class SE3FlowMatchingSelfAttn(nn.Module):
         curr_gripper[..., :3] = curr_gripper[..., :3] - center.view(bs, 1, 3)
         return pcd, curr_gripper
 
+    def fps_subsampling(self, feature_obs, pcd_obs, normal_obs): 
+        n_points_out = pcd_obs.shape[1] // self._fps_subsampling_factor
+        ## Get n points via FPS ##
+        pcd_obs, out_indices = fps(pcd_obs, K=n_points_out)
+
+        ## Subsample features and normals ##
+        feature_obs = torch.gather(feature_obs, 1, out_indices.unsqueeze(-1).expand(-1, -1, feature_obs.shape[-1]))
+        if self._use_normals:
+            normal_obs = torch.gather(normal_obs, 1, out_indices.unsqueeze(-1).expand(-1, -1, normal_obs.shape[-1]))
+        
+        return feature_obs, pcd_obs, normal_obs
+
     def forward(
         self,
         gt_trajectory,
@@ -184,6 +220,8 @@ class SE3FlowMatchingSelfAttn(nn.Module):
             The model converts it to 6D internally if needed.
         """
         feature_obs, pcd_obs, normal_obs = self.feature_pcd_encoder(rgb_obs, pcd_obs, normal_obs)
+        if self._fps_subsampling_factor > 1:
+            feature_obs, pcd_obs, normal_obs = self.fps_subsampling(feature_obs, pcd_obs, normal_obs)
         if self._relative:
             pcd_obs, curr_gripper = self.convert2rel(pcd_obs, curr_gripper)
         if gt_trajectory is not None:

@@ -39,6 +39,7 @@ class SE3FlowMatchingLangEnhanced(nn.Module):
                  use_center_distance=True,
                  use_center_projection=True,
                  use_vector_projection=True,
+                 add_center=True,
                  ):
         super().__init__()
         self._quaternion_format = quaternion_format
@@ -62,7 +63,8 @@ class SE3FlowMatchingLangEnhanced(nn.Module):
             use_adaln=use_adaln,
             use_center_distance=use_center_distance,
             use_center_projection=use_center_projection,
-            use_vector_projection=use_vector_projection
+            use_vector_projection=use_vector_projection,
+            add_center=add_center
         )
         decoder = LangEnhancedURSADecoder(d_model=embedding_dim, 
                                           nhead=8, num_layers=decoder_depth, 
@@ -71,7 +73,8 @@ class SE3FlowMatchingLangEnhanced(nn.Module):
                                           use_adaln=use_adaln,
                                           use_center_distance=use_center_distance,
                                           use_center_projection=use_center_projection,
-                                          use_vector_projection=use_vector_projection
+                                          use_vector_projection=use_vector_projection,
+                                          add_center=add_center
                                           )
         self.model = SE3GraspVectorFieldLangEnhanced(
             encoder=encoder, 

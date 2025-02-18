@@ -93,6 +93,7 @@ class Arguments(tap.Tap):
     use_center_distance: int = 1,
     use_center_projection: int = 1,
     use_vector_projection: int = 1,
+    add_center: int = 1
 
 class TrainTester(BaseTrainTester):
     """Train/test a trajectory optimization algorithm."""
@@ -190,6 +191,7 @@ class TrainTester(BaseTrainTester):
             use_center_distance=bool(self.args.use_center_distance),
             use_center_projection=bool(self.args.use_center_projection),
             use_vector_projection=bool(self.args.use_vector_projection),
+            add_center=bool(self.args.add_center),
         )
         print("Model parameters:", count_parameters(_model))
 
@@ -453,7 +455,6 @@ def generate_visualizations(pred, gt, mask, box_size=0.3):
     plt.close()
     return img.transpose(2, 0, 1)
 
-
 if __name__ == '__main__':
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     # Arguments
@@ -469,6 +470,7 @@ if __name__ == '__main__':
             task=args.tasks[0] if len(args.tasks) == 1 else None,
             buffer=args.gripper_loc_bounds_buffer,
         )
+
     log_dir = args.base_log_dir / args.exp_log_dir / args.run_log_dir
     args.log_dir = log_dir
     log_dir.mkdir(exist_ok=True, parents=True)

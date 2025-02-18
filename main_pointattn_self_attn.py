@@ -86,6 +86,15 @@ class Arguments(tap.Tap):
     gripper_depth: int = 2
     decoder_depth: int = 4
     decoder_dropout: float = 0.2
+    distance_scale: float = 1.0
+    use_adaln: int = 0
+    fps_subsampling_factor: int = 1
+    gripper_history_as_points: int = 0
+    feature_type: str = 'sinusoid'
+    use_center_distance: int = 1,
+    use_center_projection: int = 1,
+    use_vector_projection: int = 1,
+    add_center: int = 1
 
 class TrainTester(BaseTrainTester):
     """Train/test a trajectory optimization algorithm."""
@@ -164,7 +173,6 @@ class TrainTester(BaseTrainTester):
             backbone=self.args.backbone,
             feature_res=args.feature_res,
             embedding_dim=self.args.embedding_dim,
-            fps_subsampling_factor=self.args.fps_subsampling_factor,
             gripper_loc_bounds=self.args.gripper_loc_bounds,
             quaternion_format=self.args.quaternion_format,
             diffusion_timesteps=self.args.diffusion_timesteps,
@@ -175,7 +183,16 @@ class TrainTester(BaseTrainTester):
             rot_factor=self.args.rot_factor,
             gripper_depth=self.args.gripper_depth,
             decoder_depth=self.args.decoder_depth,
-            decoder_dropout=self.args.decoder_dropout
+            decoder_dropout=self.args.decoder_dropout,
+            distance_scale=self.args.distance_scale,
+            use_adaln=bool(self.args.use_adaln),
+            fps_subsampling_factor=self.args.fps_subsampling_factor,
+            gripper_history_as_points=bool(self.args.gripper_history_as_points),
+            feature_type=self.args.feature_type,
+            use_center_distance=bool(self.args.use_center_distance),
+            use_center_projection=bool(self.args.use_center_projection),
+            use_vector_projection=bool(self.args.use_vector_projection),
+            add_center=bool(self.args.add_center),
         )
         print("Model parameters:", count_parameters(_model))
 
@@ -439,7 +456,6 @@ def generate_visualizations(pred, gt, mask, box_size=0.3):
     plt.close()
     return img.transpose(2, 0, 1)
 
-
 if __name__ == '__main__':
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     # Arguments
@@ -455,6 +471,7 @@ if __name__ == '__main__':
             task=args.tasks[0] if len(args.tasks) == 1 else None,
             buffer=args.gripper_loc_bounds_buffer,
         )
+
     log_dir = args.base_log_dir / args.exp_log_dir / args.run_log_dir
     args.log_dir = log_dir
     log_dir.mkdir(exist_ok=True, parents=True)

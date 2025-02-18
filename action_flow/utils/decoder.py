@@ -4,12 +4,25 @@ from geo3dattn.model.ursa_transformer.ursa_transformer import URSATransformerEnc
 from diffuser_actor.utils.layers import ParallelAttention
 
 class SE3PCDSelfAttnDecoder(nn.Module):
-    def __init__(self, embedding_dim, x1_depth=2, s_depth=2, x2_depth=2, nhead=8, dropout=0.2, feature_type='sinusoid'):
+    def __init__(self, 
+                embedding_dim, 
+                x1_depth=2, 
+                s_depth=2, 
+                x2_depth=2, 
+                nhead=8, 
+                dropout=0.2, 
+                feature_type='sinusoid',
+                distance_scale=1.0, 
+                use_adaln=False, 
+                use_center_distance=True,
+                use_center_projection=True,
+                use_vector_projection=True,
+                add_center=True):
         super().__init__()
 
-        self.cross_attn1 = URSATransformer(d_model=embedding_dim, nhead=nhead, num_layers=x1_depth, dropout=dropout, feature_type=feature_type)
-        self.self_attn = URSATransformerEncoder(d_model=embedding_dim, nhead=nhead, num_layers=s_depth, dropout=dropout, feature_type=feature_type)
-        self.cross_attn2 = URSATransformer(d_model=embedding_dim, nhead=nhead, num_layers=x2_depth, dropout=dropout, feature_type=feature_type)
+        self.cross_attn1 = URSATransformer(d_model=embedding_dim, nhead=nhead, num_layers=x1_depth, dropout=dropout, feature_type=feature_type, use_center_distance=use_center_distance, use_center_projection=use_center_projection, use_vector_projection=use_vector_projection, add_center=add_center, distance_scale=distance_scale, use_adaln=use_adaln)
+        self.self_attn = URSATransformerEncoder(d_model=embedding_dim, nhead=nhead, num_layers=s_depth, dropout=dropout, feature_type=feature_type, use_center_distance=use_center_distance, use_center_projection=use_center_projection, use_vector_projection=use_vector_projection, add_center=add_center)
+        self.cross_attn2 = URSATransformer(d_model=embedding_dim, nhead=nhead, num_layers=x2_depth, dropout=dropout, feature_type=feature_type, use_center_distance=use_center_distance, use_center_projection=use_center_projection, use_vector_projection=use_vector_projection, add_center=add_center, distance_scale=distance_scale, use_adaln=use_adaln)
 
     def forward(self, tgt, cross_memory, self_memory, query_geometric_args, cross_geometric_args, self_geometric_args):
         nact = tgt.size(1)
@@ -44,7 +57,8 @@ class LangEnhancedURSADecoder(nn.Module):
                         feature_type='sinusoid', 
                         use_center_distance=True,
                         use_center_projection=True,
-                        use_vector_projection=True):
+                        use_vector_projection=True,
+                        add_center=True):
         super().__init__()   
         self.ursa_layer = nn.ModuleList() 
         self.lang_layer = nn.ModuleList()
@@ -58,7 +72,8 @@ class LangEnhancedURSADecoder(nn.Module):
                                                     feature_type=feature_type,
                                                     use_center_distance=use_center_distance,
                                                     use_center_projection=use_center_projection,
-                                                    use_vector_projection=use_vector_projection))
+                                                    use_vector_projection=use_vector_projection,
+                                                    add_center=add_center))
             self.lang_layer.append(ParallelAttention(
             num_layers=1,
             d_model=d_model, n_heads=nhead,
