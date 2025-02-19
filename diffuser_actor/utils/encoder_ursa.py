@@ -222,23 +222,6 @@ class EncoderURSA(nn.Module):
         instr_feats = self.instruction_encoder(instruction)
         return instr_feats
 
-    def run_fps(self, context_features, context_pos):
-        # context_features (Np, B, F)
-        # context_pos (B, Np, F, 2)
-        # outputs of analogous shape, with smaller Np
-        npts, bs, ch = context_features.shape
-
-        # Sample points with FPS
-        tgt_pts = npts // self.fps_subsampling_factor
-
-        # Sample points with FPS
-        sampled_context_features, out_indices = fps(context_features.transpose(0,1), K=tgt_pts)
-        sampled_context_features = sampled_context_features.transpose(0,1)
-        _, _, ch, npos = context_pos.shape
-        sampled_context_pcd = torch.gather(context_pos, 1, out_indices.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, ch, npos))
-        return sampled_context_features, sampled_context_pcd
-
-
     def vision_language_attention(self, feats, instr_feats):
         feats, _ = self.vl_attention[0](
             seq1=feats, seq1_key_padding_mask=None,
@@ -247,3 +230,20 @@ class EncoderURSA(nn.Module):
             seq1_sem_pos=None, seq2_sem_pos=None
         )
         return feats
+    
+    def run_fps(self, context_features, context_pcd):
+        # context_features (Np, B, F)
+        # context_pos (B, Np, F, 2)
+        # outputs of analogous shape, with smaller Np
+        _, npts, _ = context_features.shape
+
+        # Sample points with FPS
+        tgt_pts = npts // self.fps_subsampling_factor
+
+        # Sample points with FPS
+        sampled_context_features, out_indices = fps(context_features, K=tgt_pts)
+        sampled_context_pcd = torch.gather(context_pcd, 1, out_indices.unsqueeze(-1).expand(-1, -1, context_pcd.shape[-1]))
+
+        return sampled_context_features, sampled_context_pcd
+
+
