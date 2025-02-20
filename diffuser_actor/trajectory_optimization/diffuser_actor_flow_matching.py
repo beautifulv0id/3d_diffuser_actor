@@ -339,9 +339,10 @@ class DiffuserActorFlowMatching(nn.Module):
         timesteps = torch.randint(0, self.flow.num_steps, (batch_size,)).to(device=gt_trajectory.device, dtype=gt_trajectory.dtype)
 
         at = self.flow.flow_at_t(a0, a1, timesteps)
-        #noisy_trajectory = self.flow.vector_field_at_t(a1, at, timesteps)
         # the noisy trajectory should be the sample, i.e., the noisy waypoint that we go through
         noisy_trajectory = at
+        # the output of the policy should be the vector field at this location
+        noisy_label = self.flow.vector_field_at_t(a1, at, timesteps)
 
         noisy_trajectory[cond_mask] = cond_data[cond_mask]  # condition
         assert not cond_mask.any()
@@ -357,8 +358,8 @@ class DiffuserActorFlowMatching(nn.Module):
             trans = layer_pred[..., :3]
             rot = layer_pred[..., 3:9]
             loss = (
-                30 * F.l1_loss(trans, noisy_trajectory[..., :3], reduction='mean')
-                + 10 * F.l1_loss(rot, noisy_trajectory[..., 3:9], reduction='mean')
+                30 * F.l1_loss(trans, noisy_label[..., :3], reduction='mean')
+                + 10 * F.l1_loss(rot, noisy_label[..., 3:9], reduction='mean')
             )
             if torch.numel(gt_openess) > 0:
                 openess = layer_pred[..., 9:]
