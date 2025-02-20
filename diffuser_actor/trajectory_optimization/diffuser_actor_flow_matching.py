@@ -339,7 +339,9 @@ class DiffuserActorFlowMatching(nn.Module):
         timesteps = torch.randint(0, self.flow.num_steps, (batch_size,)).to(device=gt_trajectory.device, dtype=gt_trajectory.dtype)
 
         at = self.flow.flow_at_t(a0, a1, timesteps)
-        noisy_trajectory = self.flow.vector_field_at_t(a1, at, timesteps)
+        #noisy_trajectory = self.flow.vector_field_at_t(a1, at, timesteps)
+        # the noisy trajectory should be the sample, i.e., the noisy waypoint that we go through
+        noisy_trajectory = at
 
         noisy_trajectory[cond_mask] = cond_data[cond_mask]  # condition
         assert not cond_mask.any()
