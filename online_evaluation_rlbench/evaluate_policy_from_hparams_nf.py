@@ -56,8 +56,7 @@ def load_models(args):
     print("Loading model from", args.checkpoint, flush=True)
 
     # Gripper workspace is the union of workspaces for all tasks
-    # if args.single_task_gripper_loc_bounds and len(args.tasks) == 1:
-    if len(args.tasks) == 1:
+    if args.single_task_gripper_loc_bounds and len(args.tasks) == 1:
         task = args.tasks[0]
     else:
         task = None
@@ -66,8 +65,6 @@ def load_models(args):
         args.gripper_loc_bounds_file,
         task=task, buffer=args.gripper_loc_bounds_buffer,
     )
-    print (gripper_loc_bounds)
-    # input ("WAIT")
 
     if args.test_model == "3d_diffuser_actor":
         model = DiffuserActor(
@@ -121,7 +118,7 @@ def load_models(args):
         print('diffusion_timesteps:', args.diffusion_timesteps)
         print('nhist:', args.num_history)
         print('relative:', bool(args.relative_action))
-        from action_flow.se3_flow_matching_felix_enc_x2_100 import SE3FlowMatching
+
         model = SE3FlowMatching(
             backbone=args.backbone,
             image_size=tuple(int(x) for x in args.image_size.split(",")),
@@ -133,79 +130,6 @@ def load_models(args):
             nhist=args.num_history,
             relative=bool(args.relative_action)
         )
-    elif args.test_model == "pointattn_15":
-
-        print("model args:")
-        print('backbone:', args.backbone)
-        print('image_size:', tuple(int(x) for x in args.image_size.split(",")))
-        print('embedding_dim:', args.embedding_dim)
-        print('fps_subsampling_factor:', args.fps_subsampling_factor)
-        print('gripper_loc_bounds:', gripper_loc_bounds)
-        print('quaternion_format:', args.quaternion_format)
-        print('diffusion_timesteps:', args.diffusion_timesteps)
-        print('nhist:', args.num_history)
-        print('relative:', bool(args.relative_action))
-        from action_flow.se3_flow_matching_felix_enc_x1_100_8layers_no_do import SE3FlowMatching
-        model = SE3FlowMatching(
-            backbone=args.backbone,
-            image_size=tuple(int(x) for x in args.image_size.split(",")),
-            embedding_dim=args.embedding_dim,
-            fps_subsampling_factor=args.fps_subsampling_factor,
-            gripper_loc_bounds=gripper_loc_bounds,
-            quaternion_format=args.quaternion_format,
-            diffusion_timesteps=args.diffusion_timesteps,
-            nhist=args.num_history,
-            relative=bool(args.relative_action)
-        )
-    elif args.test_model == "pointattn_19":
-
-        print("model args:")
-        print('backbone:', args.backbone)
-        print('image_size:', tuple(int(x) for x in args.image_size.split(",")))
-        print('embedding_dim:', args.embedding_dim)
-        print('fps_subsampling_factor:', args.fps_subsampling_factor)
-        print('gripper_loc_bounds:', gripper_loc_bounds)
-        print('quaternion_format:', args.quaternion_format)
-        print('diffusion_timesteps:', args.diffusion_timesteps)
-        print('nhist:', args.num_history)
-        print('relative:', bool(args.relative_action))
-        from action_flow.se3_flow_matching_felix_enc_x1_100_diff_geo3_8layers_no_do import SE3FlowMatching
-        model = SE3FlowMatching(
-            backbone=args.backbone,
-            image_size=tuple(int(x) for x in args.image_size.split(",")),
-            embedding_dim=args.embedding_dim,
-            fps_subsampling_factor=args.fps_subsampling_factor,
-            gripper_loc_bounds=gripper_loc_bounds,
-            quaternion_format=args.quaternion_format,
-            diffusion_timesteps=args.diffusion_timesteps,
-            nhist=args.num_history,
-            relative=bool(args.relative_action)
-        )
-
-    elif args.test_model == "pointattn_25":
-
-        print("model args:")
-        print('backbone:', args.backbone)
-        print('image_size:', tuple(int(x) for x in args.image_size.split(",")))
-        print('embedding_dim:', args.embedding_dim)
-        print('fps_subsampling_factor:', args.fps_subsampling_factor)
-        print('gripper_loc_bounds:', gripper_loc_bounds)
-        print('quaternion_format:', args.quaternion_format)
-        print('diffusion_timesteps:', args.diffusion_timesteps)
-        print('nhist:', args.num_history)
-        print('relative:', bool(args.relative_action))
-        from action_flow.se3_flow_matching_lang_enhanced import SE3FlowMatchingLangEnhanced as SE3FlowMatching
-        model = SE3FlowMatching(
-            backbone=args.backbone,
-            image_size=tuple(int(x) for x in args.image_size.split(",")),
-            embedding_dim=args.embedding_dim,
-            gripper_loc_bounds=gripper_loc_bounds,
-            quaternion_format=args.quaternion_format,
-            diffusion_timesteps=args.diffusion_timesteps,
-            nhist=args.num_history,
-            relative=bool(args.relative_action)
-        )
-
     elif args.test_model == "pointattn_self_attn":
         model = SE3FlowMatchingSelfAttn(
             backbone=args.backbone,
@@ -222,14 +146,13 @@ def load_models(args):
         raise NotImplementedError
 
     # Load model weights
-    print ("LOADING WEIGHTS FROM: ", args.checkpoint)
+    print (args.checkpoint)
     model_dict = torch.load(args.checkpoint, map_location="cpu")
     model_dict_weight = {}
     for key in model_dict["weight"]:
         _key = key[7:]
         model_dict_weight[_key] = model_dict["weight"][key]
     model.load_state_dict(model_dict_weight)
-    model.to(device)
     model.eval()
 
     return model
@@ -282,8 +205,7 @@ if __name__ == "__main__":
         instructions=instruction,
         apply_cameras=args.cameras,
         action_dim=args.action_dim,
-        predict_trajectory=bool(args.predict_trajectory),
-        model=args.test_model
+        predict_trajectory=bool(args.predict_trajectory)
     )
     max_eps_dict = load_episodes()["max_episode_length"]
     task_success_rates = {}

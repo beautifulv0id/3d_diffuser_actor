@@ -229,6 +229,7 @@ class Actioner:
                 [1, interpolation_length - 1], False
             ).to(rgbs.device)
             if 'pointattn' in self._model:
+                print ("HERE!!!")
                 output["trajectory"] = self._policy(
                     fake_traj,
                     rgbs[:, -1],
@@ -525,6 +526,12 @@ class RLBenchEnv:
             pcds = torch.Tensor([]).to(device)
             grippers = torch.Tensor([]).to(device)
 
+            gt_keyframe_actions = []
+            for f in keypoint_discovery(demo):
+                obs = demo[f]
+                action = np.concatenate([obs.gripper_pose, [obs.gripper_open]])
+                gt_keyframe_actions.append(action)
+
             # descriptions, obs = task.reset()
             descriptions, obs = task.reset_to_demo(demo)
 
@@ -564,6 +571,10 @@ class RLBenchEnv:
                     gripper_input,
                     interpolation_length=interpolation_length
                 )
+                print (output)
+                # output['trajectory'] = torch.from_numpy(gt_keyframe_actions[step_id]).unsqueeze(0).unsqueeze(0) # insert here gt stuff
+                # print (output)
+
 
                 if verbose:
                     print(f"Step {step_id}")

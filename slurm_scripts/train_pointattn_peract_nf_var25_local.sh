@@ -1,24 +1,10 @@
 #!/bin/bash
-#SBATCH -t 48:00:00
-#SBATCH -c 6
-#SBATCH --mem=32G
-#SBATCH -p gpu
-#SBATCH --gres=gpu:1
-#SBATCH --output=train_logs/slurm_logs/%j_train.out
-#SBATCH -J pointattn
-#SBATCH -C 'rtx3090|a5000|a6000'
-
-
-source /home/funk/miniforge3/bin/activate
-conda activate 3d_diffuser_actor
 
 config_name=PointAttn_18Peract_100Demo_multitask
-main_dir=$(./scripts/get_log_path.sh $config_name)
-
 dataset=/home/share/3D_attn_felix/Peract_packaged/train
-dataset=/media/funk/INTENSO/300_RL_BENCH/data/peract/train
+dataset=/media/funk/INTENSO/300_RL_BENCH/data/peract_new/train
 valset=/home/share/3D_attn_felix/Peract_packaged/val
-valset=/media/funk/INTENSO/300_RL_BENCH/data/peract/val
+valset=/media/funk/INTENSO/300_RL_BENCH/data/peract_new/val
 
 instruction_path=/home/share/3D_attn_felix/peract/instructions.pkl
 instruction_path=/media/funk/INTENSO/300_RL_BENCH/peract_from_cluster/instructions.pkl
@@ -30,13 +16,13 @@ dense_interpolation=1
 interpolation_length=2
 num_history=3
 diffusion_timesteps=100
-B=6
+B=1
 C=120
-ngpus=$(python3 scripts/helper/count_cuda_devices.py)
+ngpus=1
 quaternion_format=xyzw
 
 CUDA_LAUNCH_BLOCKING=1 WANDB_PROJECT=3d_diffuser_actor_debug torchrun --nproc_per_node $ngpus --master_port $RANDOM \
-    main_pointattn_nf25.py \
+    main_pointattn_nf25_3_1.py \
     --tasks insert_onto_square_peg \
     --dataset $dataset \
     --valset $valset \
@@ -49,7 +35,6 @@ CUDA_LAUNCH_BLOCKING=1 WANDB_PROJECT=3d_diffuser_actor_debug torchrun --nproc_pe
     --val_freq 2500 \
     --dense_interpolation $dense_interpolation \
     --interpolation_length $interpolation_length \
-    --exp_log_dir $main_dir \
     --batch_size $B \
     --batch_size_val 14 \
     --cache_size 2000 \
