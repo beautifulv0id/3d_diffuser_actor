@@ -6,10 +6,14 @@ from torch.nn import functional as F
 from torchvision.ops import FeaturePyramidNetwork
 
 from geo3dattn.model.ursa_transformer.ursa_transformer import URSATransformer
+from geo3dattn.model.nursa_transformer.ursa_transformer import NURSATransformer
 from .layers import ParallelAttention
 from .resnet import load_resnet50, load_resnet18
 from .clip import load_clip
 
+from diffuser_actor.utils.utils import (
+    compute_rotation_matrix_from_ortho6d,
+)
 
 class EncoderURSA(nn.Module):
 
@@ -21,7 +25,8 @@ class EncoderURSA(nn.Module):
                  nhist=3,
                  num_attn_heads=8,
                  num_vis_ins_attn_layers=2,
-                 fps_subsampling_factor=5):
+                 fps_subsampling_factor=5,
+                 history_as_point=True):
         super().__init__()
         assert backbone in ["resnet50", "resnet18", "clip"]
         assert image_size in [(128, 128), (256, 256)]
@@ -30,6 +35,7 @@ class EncoderURSA(nn.Module):
         self.image_size = image_size
         self.num_sampling_level = num_sampling_level
         self.fps_subsampling_factor = fps_subsampling_factor
+        self.history_as_point = history_as_point
 
         # Frozen backbone
         if backbone == "resnet50":
@@ -101,23 +107,6 @@ class EncoderURSA(nn.Module):
         return self._encode_gripper(curr_gripper, self.curr_gripper_embed,
                                     context_feats, context)
 
-    def encode_goal_gripper(self, goal_gripper, context_feats, context):
-        """
-        Compute goal gripper position features and positional embeddings.
-
-        Args:
-            - goal_gripper: (B, 3+)
-
-        Returns:
-            - goal_gripper_feats: (B, 1, F)
-            - goal_gripper_pos: (B, 1, F, 2)
-        """
-        goal_gripper_feats, goal_gripper_pos = self._encode_gripper(
-            goal_gripper[:, None], self.goal_gripper_embed,
-            context_feats, context
-        )
-        return goal_gripper_feats, goal_gripper_pos
-
     def _encode_gripper(self, gripper, gripper_embed, context_feats, context):
         """
         Compute gripper position features and positional embeddings.
@@ -139,11 +128,17 @@ class EncoderURSA(nn.Module):
         device = gripper.device
         batch = gripper.shape[0]
 
+        gripper_pos = gripper[...,:3]
+        if self.history_as_point:
+            gripper_rot = torch.zeros((3,3))[None,None,:,:].repeat(batch, gripper_pos.shape[1], 1, 1).to(device)
+        else:
+            gripper_rot = compute_rotation_matrix_from_ortho6d(gripper[...,3:9])
+
         # Rotary positional encoding
         geom_args = {
             'query': 
-                {'centers': gripper[...,:3], 
-                 'vectors': torch.zeros((3,3))[None,None,:,:].repeat(batch, gripper.shape[1], 1, 1).to(device)},
+                {'centers': gripper_pos, 
+                 'vectors': gripper_rot},
             'key':              
                 {'centers': context, 
                  'vectors': torch.zeros((3,3))[None,None,:,:].repeat(batch, context.shape[1], 1, 1).to(device)},
@@ -246,4 +241,30 @@ class EncoderURSA(nn.Module):
 
         return sampled_context_features, sampled_context_pcd
 
+
+
+class EncoderNURSA(EncoderURSA):
+
+    def __init__(self,
+                 backbone="clip",
+                 image_size=(256, 256),
+                 embedding_dim=60,
+                 num_sampling_level=3,
+                 nhist=3,
+                 num_attn_heads=8,
+                 num_vis_ins_attn_layers=2,
+                 fps_subsampling_factor=5,
+                 history_as_point=True):
+        super().__init__(
+            backbone=backbone,
+            image_size=image_size,
+            embedding_dim=embedding_dim,
+            num_sampling_level=num_sampling_level,
+            nhist=nhist,
+            num_attn_heads=num_attn_heads,
+            num_vis_ins_attn_layers=num_vis_ins_attn_layers,
+            fps_subsampling_factor=fps_subsampling_factor,
+            history_as_point=history_as_point
+        )
+        self.gripper_context_head = NURSATransformer(embedding_dim, nhead=num_attn_heads, num_layers=3)
 

@@ -4,8 +4,8 @@ import torch.nn.functional as F
 import einops
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
-from geo3dattn.model.ursa_transformer.ursa_transformer import URSATransformer, URSATransformerEncoder
-from diffuser_actor.utils.encoder_ursa import EncoderURSA
+from geo3dattn.model.nursa_transformer.ursa_transformer import NURSATransformer, NURSATransformerEncoder
+from diffuser_actor.utils.encoder_ursa import EncoderNURSA
 from diffuser_actor.utils.layers import ParallelAttention
 from diffuser_actor.utils.position_encodings import (
     SinusoidalPosEmb
@@ -21,7 +21,7 @@ from diffuser_actor.utils.utils import (
 )
 
 
-class DiffuserActorURSA(nn.Module):
+class DiffuserActorNURSA(nn.Module):
 
     def __init__(self,
                  backbone="clip",
@@ -44,7 +44,7 @@ class DiffuserActorURSA(nn.Module):
         self._relative = relative
         self.use_instruction = use_instruction
         self.history_as_point = history_as_point
-        self.encoder = EncoderURSA(
+        self.encoder = EncoderNURSA(
             backbone=backbone,
             image_size=image_size,
             embedding_dim=embedding_dim,
@@ -491,13 +491,13 @@ class DiffusionHead(nn.Module):
         ])
 
         # Estimate attends to context (no subsampling)
-        self.cross_attn = URSATransformer(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
-        self.self_attn = URSATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=4, use_adaln=True)
+        self.cross_attn = NURSATransformer(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
+        self.self_attn = NURSATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=4, use_adaln=True)
         # Specific (non-shared) Output layers:
         # 1. Rotation
         self.rotation_proj = nn.Linear(embedding_dim, embedding_dim)
         if not self.lang_enhanced:
-            self.rotation_self_attn = URSATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
+            self.rotation_self_attn = NURSATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
         else:  # interleave cross-attention to language
             raise NotImplementedError
         
@@ -510,7 +510,7 @@ class DiffusionHead(nn.Module):
         # 2. Position
         self.position_proj = nn.Linear(embedding_dim, embedding_dim)
         if not self.lang_enhanced:
-            self.position_self_attn = URSATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
+            self.position_self_attn = NURSATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
         else:  # interleave cross-attention to language
             raise NotImplementedError
         

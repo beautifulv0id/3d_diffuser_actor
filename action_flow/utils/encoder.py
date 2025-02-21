@@ -196,7 +196,7 @@ class SE3GraspPointCloudEncoder(ModuleAttrMixin):
         )
         return feats
 
-    def encode_gripper(self, gripper, obs_features, obs_points):
+    def encode_gripper(self, gripper, obs_features, obs_geom_args):
         gripper_features = self.gripper_features[None,...].repeat(gripper.size(0), 1, 1)
         if self.gripper_history_as_points:
             vectors = torch.zeros((3,3))[None,None,:,:].repeat(gripper.shape[0], gripper.shape[1], 1, 1).to(gripper.device)
@@ -205,7 +205,7 @@ class SE3GraspPointCloudEncoder(ModuleAttrMixin):
         geom_args = {
                     'query': 
                         {'centers': gripper[:,:,:3,-1], 'vectors': vectors},
-                    'key': obs_points
+                    'key': obs_geom_args
                      }
         gripper_features = self.gripper_decoder(tgt=gripper_features, memory=obs_features, geometric_args=geom_args)
         return gripper_features
@@ -224,20 +224,20 @@ class SE3GraspPointCloudEncoder(ModuleAttrMixin):
         vectors = torch.zeros((3,3))[None,None,:,:].repeat(batch, pcd.shape[1], 1, 1).to(device)
         if normals is not None:
             vectors[...,:3,0] = normals
-        obs_points = {'centers': pcd, 'vectors': vectors}
+        geom_args = {'centers': pcd, 'vectors': vectors}
 
         obs_features = pcd_features
         
         # add gripper features
-        gripper_features = self.encode_gripper(current_gripper, obs_features, obs_points)        
+        gripper_features = self.encode_gripper(current_gripper, obs_features, geom_args)        
         obs_features = torch.cat((obs_features, gripper_features), dim=1)
         
         if self.gripper_history_as_points:
             gripper_vectors = torch.zeros((3,3))[None,None,:,:].repeat(batch, current_gripper.shape[1], 1, 1).to(device)
         else:
             gripper_vectors = current_gripper[:,:,:3,:3]
-        obs_points['vectors'] = torch.cat((obs_points["vectors"], gripper_vectors), dim=1)
-        obs_points['centers'] = torch.cat((obs_points["centers"], current_gripper[:,:,:3,-1]), dim=1)
+        geom_args['vectors'] = torch.cat((geom_args["vectors"], gripper_vectors), dim=1)
+        geom_args['centers'] = torch.cat((geom_args["centers"], current_gripper[:,:,:3,-1]), dim=1)
 
         if instruction is not None:
             instr_features = self.encode_instruction(instruction)
@@ -245,7 +245,7 @@ class SE3GraspPointCloudEncoder(ModuleAttrMixin):
         else:
             instr_features = None
 
-        return obs_points, obs_features, instr_features
+        return geom_args, obs_features, instr_features
 
     def encode_act(self, act):
         act_points = {'centers': act[..., :3, -1], 'vectors': act[..., :3, :3]}

@@ -6,7 +6,7 @@
 #SBATCH --array=0-4%1
 #SBATCH --gres=gpu:1
 #SBATCH --output=train_logs/slurm_logs/%A_train/%a.out
-#SBATCH -J train_pointattn_self_attn_peract
+#SBATCH -J train_pointattn_lang_enhanced_peract
 
 echo "Command Line Arguments: $@"
 
@@ -39,7 +39,7 @@ val_freq=1000
 train_iters=200000
 
 # Model parameters
-diffusion_timesteps=100
+diffusion_timesteps=10
 num_history=3
 use_normals=0
 rot_factor=1
@@ -49,23 +49,23 @@ decoder_dropout=0.0
 distance_scale=1.0
 use_adaln=1
 feature_res="res3"
-fps_subsampling_factor=5
-gripper_history_as_points=1
+fps_subsampling_factor=1
+gripper_history_as_points=0
 use_center_distance=1
 use_center_projection=1
-use_vector_projection=0
+use_vector_projection=1
 add_center=1
 feature_type="sinusoid"
 
+# Logging parameters
 base_log_dir="train_logs"
-
 if [ ${#tasks[@]} -gt 1 ]; then
     task_desc="multitask"
 else
     task_desc=${tasks[0]}
 fi
 
-run_log_dir="pointattn_sa_$task_desc-C$C-B$B-lr$lr-DI$dense_interpolation-$interpolation_length-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-drop$decoder_dropout-DS$distance_scale-ADALN$use_adaln-$feature_res-fps$fps_subsampling_factor-HP$gripper_history_as_points-CD$use_center_distance-CP$use_center_projection-VP$use_vector_projection-AC$add_center-FT$feature_type"
+run_log_dir="pointattn_$task_desc-C$C-B$B-lr$lr-DI$dense_interpolation-$interpolation_length-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-drop$decoder_dropout-DS$distance_scale-ADALN$use_adaln-$feature_res-fps$fps_subsampling_factor-HP$gripper_history_as_points-CD$use_center_distance-CP$use_center_projection-VP$use_vector_projection-AC$add_center-FT$feature_type"
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -193,5 +193,5 @@ docker exec -t $id /bin/bash -c "source slurm_scripts/startup-hook.sh && cd /wor
                         CUDA_LAUNCH_BLOCKING=1 torchrun \
                         --nproc_per_node $ngpus \
                         --master_port $RANDOM \
-                        main_pointattn_self_attn.py $kwargs"
+                        main_pointattn_lang_enhanced.py $kwargs"
 docker stop $id

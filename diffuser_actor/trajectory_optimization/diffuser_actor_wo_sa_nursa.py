@@ -4,10 +4,11 @@ import torch.nn.functional as F
 import einops
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
-from geo3dattn.model.ursa_transformer.ursa_transformer import URSATransformer, URSATransformerEncoder
-from diffuser_actor.utils.encoder_ursa import EncoderURSA
+from geo3dattn.model.nursa_transformer.ursa_transformer import NURSATransformer
+from diffuser_actor.utils.encoder_ursa import EncoderNURSA
 from diffuser_actor.utils.layers import ParallelAttention
 from diffuser_actor.utils.position_encodings import (
+    RotaryPositionEncoding3D,
     SinusoidalPosEmb
 )
 from diffuser_actor.utils.utils import (
@@ -15,13 +16,11 @@ from diffuser_actor.utils.utils import (
     get_ortho6d_from_rotation_matrix,
     normalise_quat,
     matrix_to_quaternion,
-    quaternion_to_matrix,
-    merge_geometric_args,
-    measure_memory
+    quaternion_to_matrix
 )
 
 
-class DiffuserActorURSA(nn.Module):
+class DiffuserActorWoSANURSA(nn.Module):
 
     def __init__(self,
                  backbone="clip",
@@ -36,23 +35,20 @@ class DiffuserActorURSA(nn.Module):
                  diffusion_timesteps=100,
                  nhist=3,
                  relative=False,
-                 lang_enhanced=False,
-                 history_as_point=True):
+                 lang_enhanced=False):
         super().__init__()
         self._rotation_parametrization = rotation_parametrization
         self._quaternion_format = quaternion_format
         self._relative = relative
         self.use_instruction = use_instruction
-        self.history_as_point = history_as_point
-        self.encoder = EncoderURSA(
+        self.encoder = EncoderNURSA(
             backbone=backbone,
             image_size=image_size,
             embedding_dim=embedding_dim,
             num_sampling_level=1,
             nhist=nhist,
             num_vis_ins_attn_layers=num_vis_ins_attn_layers,
-            fps_subsampling_factor=fps_subsampling_factor,
-            history_as_point=history_as_point
+            fps_subsampling_factor=fps_subsampling_factor
         )
         self.prediction_head = DiffusionHead(
             embedding_dim=embedding_dim,
@@ -104,17 +100,10 @@ class DiffuserActorURSA(nn.Module):
             curr_gripper, context_feats, context
         )
 
-        fps_feats, fps_pos = self.encoder.run_fps(
-            context_feats,
-            context
-        )
-
         return (
             context_feats, context,  # contextualized visual features
             instr_feats,  # language features
             adaln_gripper_feats,  # gripper history features
-            curr_gripper,  # current gripper pose
-            fps_feats, fps_pos  # sampled visual features
         )
 
     def policy_forward_pass(self, trajectory, timestep, fixed_inputs):
@@ -124,13 +113,10 @@ class DiffuserActorURSA(nn.Module):
             context,
             instr_feats,
             adaln_gripper_feats,
-            curr_gripper,
-            fps_feats,
-            fps_pos
         ) = fixed_inputs
 
-        pos = trajectory[..., :3]
-        rot = compute_rotation_matrix_from_ortho6d(trajectory[..., 3:9].view(-1, 6)).reshape(-1, pos.shape[1], 3, 3)
+        trajectory = self.unconvert_rot(trajectory)
+        pos, rot = self.trajectory_to_se3(trajectory)
         trajectory_geom_args = {
             "centers": pos,
             "vectors": rot
@@ -141,34 +127,13 @@ class DiffuserActorURSA(nn.Module):
                 context.shape[0], context.shape[1], 1, 1
             ).to(context.device)
         }
-        pos = curr_gripper[..., :3]
-        if self.history_as_point:
-            rot = torch.zeros((3, 3))[None, None, :, :].repeat(
-                curr_gripper.shape[0], curr_gripper.shape[1], 1, 1
-            ).to(curr_gripper.device
-            )
-        else:
-            rot = compute_rotation_matrix_from_ortho6d(curr_gripper[..., 3:9].view(-1, 6)).reshape(-1, pos.shape[1], 3, 3)
-        gripper_geom_args = {
-            "centers": pos,
-            "vectors": rot
-        }
-        fps_geom_args = {
-            "centers": fps_pos,
-            "vectors": torch.zeros((3, 3))[None, None, :, :].repeat(
-                fps_pos.shape[0], fps_pos.shape[1], 1, 1
-            ).to(fps_pos.device)
-        }
         return self.prediction_head(
             trajectory_geom_args,
             timestep,
             context_feats=context_feats,
             context_geom_args=context_geom_args,
-            fps_feats=fps_feats,
-            fps_geom_args=fps_geom_args,
             instr_feats=instr_feats,
             adaln_gripper_feats=adaln_gripper_feats,
-            gripper_geom_args=gripper_geom_args
         )
 
     def conditional_sample(self, condition_data, condition_mask, fixed_inputs):
@@ -392,11 +357,9 @@ class DiffuserActorURSA(nn.Module):
         curr_gripper = self.convert_rot(curr_gripper)
 
         # Prepare inputs
-        fixed_inputs = measure_memory(self.encode_inputs,
+        fixed_inputs = self.encode_inputs(
             rgb_obs, pcd_obs, instruction, curr_gripper
         )
-
-        print("fps size", fixed_inputs[5].shape)
 
         # Condition on start-end pose
         cond_data = torch.zeros_like(gt_trajectory)
@@ -427,7 +390,7 @@ class DiffuserActorURSA(nn.Module):
         assert not cond_mask.any()
 
         # Predict the noise residual
-        pred = measure_memory(self.policy_forward_pass,
+        pred = self.policy_forward_pass(
             noisy_trajectory, timesteps, fixed_inputs
         )
 
@@ -491,13 +454,13 @@ class DiffusionHead(nn.Module):
         ])
 
         # Estimate attends to context (no subsampling)
-        self.cross_attn = URSATransformer(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
-        self.self_attn = URSATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=4, use_adaln=True)
+        self.cross_attn = NURSATransformer(d_model=embedding_dim, nhead=num_attn_heads, num_layers=6, use_adaln=True)
+
         # Specific (non-shared) Output layers:
         # 1. Rotation
         self.rotation_proj = nn.Linear(embedding_dim, embedding_dim)
         if not self.lang_enhanced:
-            self.rotation_self_attn = URSATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
+            self.rotation_cross_attn = NURSATransformer(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
         else:  # interleave cross-attention to language
             raise NotImplementedError
         
@@ -510,7 +473,7 @@ class DiffusionHead(nn.Module):
         # 2. Position
         self.position_proj = nn.Linear(embedding_dim, embedding_dim)
         if not self.lang_enhanced:
-            self.position_self_attn = URSATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
+            self.position_cross_attn = NURSATransformer(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
         else:  # interleave cross-attention to language
             raise NotImplementedError
         
@@ -528,10 +491,7 @@ class DiffusionHead(nn.Module):
         )
 
     def forward(self, trajectory_geom_args, timestep,
-                context_feats, context_geom_args, 
-                fps_feats, fps_geom_args,
-                instr_feats, adaln_gripper_feats,
-                gripper_geom_args):
+                context_feats, context_geom_args, instr_feats, adaln_gripper_feats):
         """
         Arguments:
             trajectory: 
@@ -561,18 +521,14 @@ class DiffusionHead(nn.Module):
         pos_pred, rot_pred, openess_pred = self.prediction_head(
             trajectory_geom_args, traj_feats,
             context_geom_args, context_feats,
-            fps_feats, fps_geom_args,
-            timestep, adaln_gripper_feats,
-            gripper_geom_args
+            timestep, adaln_gripper_feats
         )
         return [torch.cat((pos_pred, rot_pred, openess_pred), -1)]
 
     def prediction_head(self,
                         trajectory_geometric_args, trajectory_features,
-                        context_pcd_geometric_args, context_pcd_features,
-                        context_fps_features, context_fps_geometric_args,
-                        timesteps, curr_gripper_features,
-                        gripper_geometric_args):
+                        context_pcd_geometric_args, context_features,
+                        timesteps, curr_gripper_features):
         """
         Compute the predicted action (position, rotation, opening).
 
@@ -592,33 +548,24 @@ class DiffusionHead(nn.Module):
             timesteps, curr_gripper_features
         )
 
-        context_features = torch.cat((context_pcd_features, curr_gripper_features), 1)
         geometric_args = {
             'query': trajectory_geometric_args,
-            'key': merge_geometric_args(context_pcd_geometric_args, gripper_geometric_args),
+            'key': context_pcd_geometric_args
         }
-
         # Cross attention from gripper to full context
-        trajectory_features = measure_memory(self.cross_attn.forward,tgt = trajectory_features, 
+        trajectory_features = self.cross_attn(tgt = trajectory_features, 
                                               memory = context_features, 
                                               geometric_args = geometric_args, diff_ts = time_embs)
-        # Self-attention
-        features = torch.cat((trajectory_features, context_fps_features, curr_gripper_features), 1)
-        geometric_args = {
-            'query': merge_geometric_args(trajectory_geometric_args, context_fps_geometric_args, gripper_geometric_args)
-        }
-        features = measure_memory(self.self_attn.forward,tgt = features, geometric_args = geometric_args, diff_ts = time_embs)
-
-        n_act = trajectory_features.shape[1]
 
 
         # Rotation head
         rotation = self.predict_rot(
-            features, geometric_args, time_embs, n_act
+            trajectory_features, context_features, geometric_args, time_embs
         )
+
         # Position head
         position, position_features = self.predict_pos(
-            features, geometric_args, time_embs, n_act
+            trajectory_features, context_features, geometric_args, time_embs
         )
 
         # Openess head from position head
@@ -641,20 +588,21 @@ class DiffusionHead(nn.Module):
         curr_gripper_feats = self.curr_gripper_emb(curr_gripper_feats).unsqueeze(1)
         return time_feats + curr_gripper_feats
 
-    def predict_pos(self, features, geometric_args, time_embs, n_act):
-        position_features = measure_memory(self.position_self_attn.forward,tgt = features,
+    def predict_pos(self, gripper_features, context_features, geometric_args, time_embs):
+        position_features = self.position_cross_attn(tgt = gripper_features,
+                                                     memory = context_features,
                                                      geometric_args = geometric_args,
                                                      diff_ts = time_embs)
-        position_features = position_features[:,:n_act]
+
         position_features = self.position_proj(position_features)  # (B, N, C)
         position = self.position_predictor(position_features)
         return position, position_features
 
-    def predict_rot(self, features, geometric_args, time_embs, n_act):
-        rotation_features = measure_memory(self.rotation_self_attn.forward,tgt = features,
+    def predict_rot(self, gripper_features, context_features, geometric_args, time_embs):
+        rotation_features = self.rotation_cross_attn(tgt = gripper_features,
+                                                     memory = context_features,
                                                      geometric_args = geometric_args,
                                                      diff_ts = time_embs)
-        rotation_features = rotation_features[:,:n_act]
         rotation_features = self.rotation_proj(rotation_features)  # (B, N, C)
         rotation = self.rotation_predictor(rotation_features)
         return rotation

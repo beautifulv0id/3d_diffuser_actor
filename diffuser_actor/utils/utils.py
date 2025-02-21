@@ -3,6 +3,37 @@ import einops
 import torch
 import torch.nn.functional as F
 
+def get_function_name(func):
+    """Retrieves the fully qualified name of a function, including module hierarchy."""
+    if hasattr(func, '__self__'):  # If it's a method of a class
+        return f"{func.__self__.__class__.__name__}.{func.__name__}"
+    return func.__name__
+
+def measure_memory(func, *args, **kwargs):
+    """Measures memory usage before and after calling a function and prints the difference, including peak memory usage."""
+    torch.cuda.synchronize()  # Ensure all operations are finished before measuring
+    torch.cuda.reset_peak_memory_stats()  # Reset peak memory tracking
+    allocated_before = torch.cuda.memory_allocated()
+    
+    result = func(*args, **kwargs)  # Run the function
+    
+    torch.cuda.synchronize()  # Sync again to ensure accurate measurement
+    allocated_after = torch.cuda.memory_allocated()
+    peak_allocated = torch.cuda.max_memory_allocated()  # Peak memory usage during the function call
+    
+    memory_diff = (allocated_after - allocated_before) / 1e6  # Convert to MB
+    peak_diff = (peak_allocated - allocated_before) / 1e6  # Peak memory usage relative to the start
+    
+    func_name = get_function_name(func)
+    print(f"[{func_name}] Memory Change: {memory_diff:.2f} MB | Peak Usage: {peak_diff:.2f} MB")
+    
+    return result
+
+def merge_geometric_args(*geoms):
+    return {
+        'centers': torch.cat([geom['centers'] for geom in geoms], dim=1),
+        'vectors': torch.cat([geom['vectors'] for geom in geoms], dim=1)
+    }
 
 def normalise_quat(x: torch.Tensor):
     return x / torch.clamp(x.square().sum(dim=-1).sqrt().unsqueeze(-1), min=1e-10)
