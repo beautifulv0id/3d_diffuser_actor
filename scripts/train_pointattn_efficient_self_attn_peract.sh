@@ -18,7 +18,7 @@ tasks=(open_drawer)
 
 lr=1e-4
 B=1
-C=24
+C=120
 quaternion_format=xyzw
 batch_size_val=12
 cache_size=0
@@ -37,7 +37,7 @@ decoder_dropout=0.0
 distance_scale=1.0
 use_adaln=1
 feature_res="res3"
-fps_subsampling_factor=20
+fps_subsampling_factor=5
 gripper_history_as_points=0
 use_center_distance=1
 use_center_projection=1
@@ -51,11 +51,10 @@ else
     task_desc=${tasks[0]}
 fi
 
-run_log_dir="pointattn_sa_$task_desc-C$C-B$B-lr$lr-DI$dense_interpolation-$interpolation_length-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-drop$decoder_dropout-DS$distance_scale-ADALN$use_adaln-$feature_res-fps$fps_subsampling_factor-HP$gripper_history_as_points-CD$use_center_distance-CP$use_center_projection-VP$use_vector_projection-AC$add_center-FT$feature_type"
-
+run_log_dir="pointattn_esa_$task_desc-C$C-B$B-lr$lr-DI$dense_interpolation-$interpolation_length-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-drop$decoder_dropout-DS$distance_scale-ADALN$use_adaln-$feature_res-fps$fps_subsampling_factor-HP$gripper_history_as_points-CD$use_center_distance-CP$use_center_projection-VP$use_vector_projection-AC$add_center-FT$feature_type"
 
 CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
-    main_pointattn_self_attn.py \
+    main_pointattn_efficient_self_attn.py \
     --tasks ${tasks[@]} \
     --dataset $dataset \
     --valset $valset \

@@ -14,12 +14,12 @@ from diffuser_actor.utils.utils import (
 from action_flow.utils.geometry import se3_from_rot_pos
 from action_flow.utils.encoder import SE3GraspFPSEncoder, FeaturePCDEncoder
 from action_flow.utils.se3_grasp_vector_field import SE3GraspVectorFieldSelfAttn
-from action_flow.utils.decoder import SE3PCDSelfAttnDecoder
+from action_flow.utils.decoder import SE3PCDEfficientSelfAttnDecoder
 
 from geo3dattn.policy.se3_flowmatching.common.se3_flowmatching import RectifiedLinearFlow
 
 
-class SE3FlowMatchingSelfAttn(nn.Module):
+class SE3FlowMatchingEfficientSelfAttn(nn.Module):
 
     def __init__(self,
                  backbone="clip",
@@ -72,7 +72,7 @@ class SE3FlowMatchingSelfAttn(nn.Module):
             add_center=add_center,
             fps_subsampling_factor=fps_subsampling_factor
         )
-        decoder = SE3PCDSelfAttnDecoder(embedding_dim=embedding_dim,
+        decoder = SE3PCDEfficientSelfAttnDecoder(embedding_dim=embedding_dim,
                                          x1_depth=1,
                                          s_depth=decoder_depth,
                                          x2_depth=1,
@@ -210,6 +210,7 @@ class SE3FlowMatchingSelfAttn(nn.Module):
             is ALWAYS expressed as a quaternion form.
             The model converts it to 6D internally if needed.
         """
+        # feature_obs, pcd_obs, normal_obs = self.feature_pcd_encoder(rgb_obs, pcd_obs, normal_obs)
         feature_obs, pcd_obs, normal_obs = measure_memory(self.feature_pcd_encoder.forward, rgb_obs, pcd_obs, normal_obs)
         if self._relative:
             pcd_obs, curr_gripper = self.convert2rel(pcd_obs, curr_gripper)

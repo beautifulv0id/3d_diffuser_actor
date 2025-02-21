@@ -6,7 +6,7 @@
 #SBATCH --array=0-4%1
 #SBATCH --gres=gpu:1
 #SBATCH --output=train_logs/slurm_logs/%A_train/%a.out
-#SBATCH -J train_pointattn_self_attn_peract
+#SBATCH -J train_pointattn_efficient_self_attn_peract
 
 echo "Command Line Arguments: $@"
 
@@ -65,7 +65,7 @@ else
     task_desc=${tasks[0]}
 fi
 
-run_log_dir="pointattn_sa_$task_desc-C$C-B$B-lr$lr-DI$dense_interpolation-$interpolation_length-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-drop$decoder_dropout-DS$distance_scale-ADALN$use_adaln-$feature_res-fps$fps_subsampling_factor-HP$gripper_history_as_points-CD$use_center_distance-CP$use_center_projection-VP$use_vector_projection-AC$add_center-FT$feature_type"
+run_log_dir="pointattn_esa_$task_desc-C$C-B$B-lr$lr-DI$dense_interpolation-$interpolation_length-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-drop$decoder_dropout-DS$distance_scale-ADALN$use_adaln-$feature_res-fps$fps_subsampling_factor-HP$gripper_history_as_points-CD$use_center_distance-CP$use_center_projection-VP$use_vector_projection-AC$add_center-FT$feature_type"
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -193,5 +193,5 @@ docker exec -t $id /bin/bash -c "source slurm_scripts/startup-hook.sh && cd /wor
                         CUDA_LAUNCH_BLOCKING=1 torchrun \
                         --nproc_per_node $ngpus \
                         --master_port $RANDOM \
-                        main_pointattn_self_attn.py $kwargs"
+                        main_pointattn_efficient_self_attn.py $kwargs"
 docker stop $id
