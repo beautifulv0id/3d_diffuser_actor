@@ -76,7 +76,7 @@ class Arguments(tap.Tap):
     embedding_dim: int = 120
     num_vis_ins_attn_layers: int = 2
     use_instruction: int = 0
-    rotation_parametrization: str = 'quat'
+    rotation_parametrization: str = '6D'
     quaternion_format: str = 'wxyz'
     diffusion_timesteps: int = 100
     keypose_only: int = 0
