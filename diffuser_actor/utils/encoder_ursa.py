@@ -6,6 +6,7 @@ from torch.nn import functional as F
 from torchvision.ops import FeaturePyramidNetwork
 
 from geo3dattn.model.ursa_transformer.ursa_transformer import URSATransformer
+from geo3dattn.model.nursa_transformer.ursa_transformer import NURSATransformer
 from .layers import ParallelAttention
 from .resnet import load_resnet50, load_resnet18
 from .clip import load_clip
@@ -240,4 +241,30 @@ class EncoderURSA(nn.Module):
 
         return sampled_context_features, sampled_context_pcd
 
+
+
+class EncoderNURSA(EncoderURSA):
+
+    def __init__(self,
+                 backbone="clip",
+                 image_size=(256, 256),
+                 embedding_dim=60,
+                 num_sampling_level=3,
+                 nhist=3,
+                 num_attn_heads=8,
+                 num_vis_ins_attn_layers=2,
+                 fps_subsampling_factor=5,
+                 history_as_point=True):
+        super().__init__(
+            backbone=backbone,
+            image_size=image_size,
+            embedding_dim=embedding_dim,
+            num_sampling_level=num_sampling_level,
+            nhist=nhist,
+            num_attn_heads=num_attn_heads,
+            num_vis_ins_attn_layers=num_vis_ins_attn_layers,
+            fps_subsampling_factor=fps_subsampling_factor,
+            history_as_point=history_as_point
+        )
+        self.gripper_context_head = NURSATransformer(embedding_dim, nhead=num_attn_heads, num_layers=3)
 
