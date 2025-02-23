@@ -64,11 +64,12 @@ class SE3PCDEfficientSelfAttnDecoder(nn.Module):
                 use_center_distance=True,
                 use_center_projection=True,
                 use_vector_projection=True,
-                add_center=True):
+                add_center=True,
+                point_embedding_dim=64):
         super().__init__()
 
         self.cross_attn1 = URSATransformer(d_model=embedding_dim, nhead=nhead, num_layers=x1_depth, dropout=dropout, feature_type=feature_type, use_center_distance=use_center_distance, use_center_projection=use_center_projection, use_vector_projection=use_vector_projection, add_center=add_center, distance_scale=distance_scale, use_adaln=use_adaln)
-        self.self_attn = NURSATransformerEncoder(d_model=embedding_dim, nhead=nhead, num_layers=s_depth, dropout=dropout, feature_type=feature_type, use_center_distance=use_center_distance, use_center_projection=use_center_projection, use_vector_projection=use_vector_projection, add_center=add_center)
+        self.self_attn = NURSATransformerEncoder(d_model=embedding_dim, nhead=nhead, num_layers=s_depth, dropout=dropout, point_embedding_dim=point_embedding_dim)
         self.cross_attn2 = URSATransformer(d_model=embedding_dim, nhead=nhead, num_layers=x2_depth, dropout=dropout, feature_type=feature_type, use_center_distance=use_center_distance, use_center_projection=use_center_projection, use_vector_projection=use_vector_projection, add_center=add_center, distance_scale=distance_scale, use_adaln=use_adaln)
 
     def forward(self, tgt, cross_memory, self_memory, query_geometric_args, cross_geometric_args, self_geometric_args):

@@ -87,7 +87,8 @@ class SE3FlowMatchingEfficientSelfAttn(nn.Module):
                                          use_center_distance=use_center_distance,
                                          use_center_projection=use_center_projection,
                                          use_vector_projection=use_vector_projection,
-                                         add_center=add_center
+                                         add_center=add_center,
+                                         point_embedding_dim=point_embedding_dim
                                           )
 
         self.model = SE3GraspVectorFieldSelfAttn(
