@@ -33,7 +33,7 @@ class DiffuserActorNURSA(nn.Module):
                  fps_subsampling_factor=5,
                  workspace_bounds=None,
                  crop_workspace=False,
-                 max_workspace_points=258013,
+                 max_workspace_points=4000,
                  rotation_parametrization='6D',
                  quaternion_format='xyzw',
                  diffusion_timesteps=100,

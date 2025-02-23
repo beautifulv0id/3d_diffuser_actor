@@ -19,7 +19,7 @@ from engine import BaseTrainTester
 from diffuser_actor.trajectory_optimization.diffuser_actor_nursa import DiffuserActorNURSA
 
 from utils.common_utils import (
-    load_instructions, count_parameters, get_gripper_loc_bounds, apply_to_module, load_max_workspace_points
+    load_instructions, count_parameters, load_max_workspace_points
 )
 
 import wandb
