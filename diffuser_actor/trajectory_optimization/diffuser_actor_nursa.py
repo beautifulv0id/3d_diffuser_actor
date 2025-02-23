@@ -5,7 +5,8 @@ import einops
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
 from geo3dattn.model.nursa_transformer.ursa_transformer import NURSATransformer, NURSATransformerEncoder
-from diffuser_actor.utils.encoder_ursa import EncoderNURSA
+from geo3dattn.model.ursa_transformer.ursa_transformer import URSATransformer
+from diffuser_actor.utils.encoder_ursa import EncoderURSA
 from diffuser_actor.utils.layers import ParallelAttention
 from diffuser_actor.utils.position_encodings import (
     SinusoidalPosEmb
@@ -19,7 +20,7 @@ from diffuser_actor.utils.utils import (
     merge_geometric_args,
     measure_memory
 )
-
+from utils.common_utils import apply_to_module
 
 class DiffuserActorNURSA(nn.Module):
 
@@ -30,21 +31,27 @@ class DiffuserActorNURSA(nn.Module):
                  num_vis_ins_attn_layers=2,
                  use_instruction=False,
                  fps_subsampling_factor=5,
-                 gripper_loc_bounds=None,
+                 workspace_bounds=None,
+                 crop_workspace=False,
+                 max_workspace_points=258013,
                  rotation_parametrization='6D',
                  quaternion_format='xyzw',
                  diffusion_timesteps=100,
                  nhist=3,
                  relative=False,
                  lang_enhanced=False,
-                 history_as_point=True):
+                 history_as_point=True,
+                 point_embedding_dim=1000):
         super().__init__()
         self._rotation_parametrization = rotation_parametrization
         self._quaternion_format = quaternion_format
         self._relative = relative
         self.use_instruction = use_instruction
         self.history_as_point = history_as_point
-        self.encoder = EncoderNURSA(
+        self._crop_workspace = crop_workspace
+        self._max_workspace_points = max_workspace_points
+
+        self.encoder = EncoderURSA(
             backbone=backbone,
             image_size=image_size,
             embedding_dim=embedding_dim,
@@ -52,14 +59,15 @@ class DiffuserActorNURSA(nn.Module):
             nhist=nhist,
             num_vis_ins_attn_layers=num_vis_ins_attn_layers,
             fps_subsampling_factor=fps_subsampling_factor,
-            history_as_point=history_as_point
+            history_as_point=history_as_point,
         )
         self.prediction_head = DiffusionHead(
             embedding_dim=embedding_dim,
             use_instruction=use_instruction,
             rotation_parametrization=rotation_parametrization,
             nhist=nhist,
-            lang_enhanced=lang_enhanced
+            lang_enhanced=lang_enhanced,
+            point_embedding_dim=point_embedding_dim
         )
         self.position_noise_scheduler = DDPMScheduler(
             num_train_timesteps=diffusion_timesteps,
@@ -72,21 +80,18 @@ class DiffuserActorNURSA(nn.Module):
             prediction_type="epsilon"
         )
         self.n_steps = diffusion_timesteps
-        self.gripper_loc_bounds = torch.tensor(gripper_loc_bounds)
+        self.workspace_bounds = nn.Parameter(workspace_bounds, requires_grad=False)
 
-    def encode_inputs(self, visible_rgb, visible_pcd, instruction,
+        self.fit_embedding_parameters(point_embedding_dim)
+
+    @torch.no_grad()
+    def fit_embedding_parameters(self, point_embedding_dim):
+        fit_data = torch.rand(point_embedding_dim, 3) * 2 - 1
+        apply_to_module(self, NURSATransformer, lambda x: x.fit_embedding(fit_data))
+        apply_to_module(self, NURSATransformerEncoder, lambda x: x.fit_embedding(fit_data))
+
+    def encode_inputs(self, context_feats, context, instruction,
                       curr_gripper):
-        # Compute visual features/positional embeddings at different scales
-        rgb_feats_pyramid, pcd_pyramid = self.encoder.encode_images(
-            visible_rgb, visible_pcd
-        )
-        # Keep only low-res scale
-        context_feats = einops.rearrange(
-            rgb_feats_pyramid[0],
-            "b ncam c h w -> b (ncam h w) c"
-        )
-        context = pcd_pyramid[0]
-
         # Encode instruction (B, 53, F)
         instr_feats = None
         if self.use_instruction:
@@ -116,6 +121,52 @@ class DiffuserActorNURSA(nn.Module):
             curr_gripper,  # current gripper pose
             fps_feats, fps_pos  # sampled visual features
         )
+    
+    @torch.no_grad()
+    def crop_and_resample_batch(self, pcd, rgb):
+        """
+        Crop point clouds to a 3D workspace and resample to a fixed size.
+        
+        Args:
+            pcd (torch.Tensor): Input batch of point clouds. Shape: (B, N, 3)
+            rgb (torch.Tensor): Input batch of RGB images. Shape: (B, C, H, W)
+        Returns:
+            torch.Tensor: Processed point clouds with shape (B, max_points, 3)
+        """
+        device = pcd.device
+        B, N, _ = pcd.shape
+
+        min_bound = self.workspace_bounds[0].float()
+        max_bound = self.workspace_bounds[1].float()
+        
+        # Create mask for pcd within workspace
+        mask = (pcd >= min_bound) & (pcd <= max_bound)
+        mask = mask.all(dim=-1)  # (B, N)
+        
+        pcds = []
+        rgbs = []
+        
+        for i in range(B):
+            # Extract valid points for this cloud
+            valid_pcds = pcd[i][mask[i]]  # (K, 3)
+            valid_rgbs = rgb[i][mask[i]]  
+            K = valid_pcds.size(0)
+            if K == 0:
+                raise ValueError(f"All points filtered in cloud {i}. Consider checking bounds or input data.")
+            if K >= self._max_workspace_points:
+                indices = torch.randperm(K, device=device)[:self._max_workspace_points]
+            else:
+                indices = torch.randint(0, K, (self._max_workspace_points,), device=device)
+            
+            # Select points and maintain gradient flow
+            sampled_pcds = valid_pcds[indices]
+            sampled_rgbs = valid_rgbs[indices]
+            pcds.append(sampled_pcds)
+            rgbs.append(sampled_rgbs)
+        
+        pcds = torch.stack(pcds, dim=0)
+        rgbs = torch.stack(rgbs, dim=0)
+        return pcds, rgbs
 
     def policy_forward_pass(self, trajectory, timestep, fixed_inputs):
         # Parse inputs
@@ -220,30 +271,28 @@ class DiffuserActorNURSA(nn.Module):
     def compute_trajectory(
         self,
         trajectory_mask,
-        rgb_obs,
-        pcd_obs,
+        context_feats,
+        context,
         instruction,
         curr_gripper
     ):
         # Normalize all pos
-        pcd_obs = pcd_obs.clone()
+        context = context.clone()
         curr_gripper = curr_gripper.clone()
-        pcd_obs = torch.permute(self.normalize_pos(
-            torch.permute(pcd_obs, [0, 1, 3, 4, 2])
-        ), [0, 1, 4, 2, 3])
+        context = self.normalize_pos(context)
         curr_gripper[..., :3] = self.normalize_pos(curr_gripper[..., :3])
         curr_gripper = self.convert_rot(curr_gripper)
 
         # Prepare inputs
         fixed_inputs = self.encode_inputs(
-            rgb_obs, pcd_obs, instruction, curr_gripper
+            context_feats, context, instruction, curr_gripper
         )
 
         # Condition on start-end pose
         B, nhist, D = curr_gripper.shape
         cond_data = torch.zeros(
             (B, trajectory_mask.size(1), D),
-            device=rgb_obs.device
+            device=context_feats.device
         )
         cond_mask = torch.zeros_like(cond_data)
         cond_mask = cond_mask.bool()
@@ -269,13 +318,13 @@ class DiffuserActorNURSA(nn.Module):
         return trajectory
 
     def normalize_pos(self, pos):
-        pos_min = self.gripper_loc_bounds[0].float().to(pos.device)
-        pos_max = self.gripper_loc_bounds[1].float().to(pos.device)
+        pos_min = self.workspace_bounds[0].float().to(pos.device)
+        pos_max = self.workspace_bounds[1].float().to(pos.device)
         return (pos - pos_min) / (pos_max - pos_min) * 2.0 - 1.0
 
     def unnormalize_pos(self, pos):
-        pos_min = self.gripper_loc_bounds[0].float().to(pos.device)
-        pos_max = self.gripper_loc_bounds[1].float().to(pos.device)
+        pos_min = self.workspace_bounds[0].float().to(pos.device)
+        pos_max = self.workspace_bounds[1].float().to(pos.device)
         return (pos + 1.0) / 2.0 * (pos_max - pos_min) + pos_min
 
     def convert_rot(self, signal):
@@ -361,6 +410,22 @@ class DiffuserActorNURSA(nn.Module):
             is ALWAYS expressed as a quaternion form.
             The model converts it to 6D internally if needed.
         """
+        rgb_feats_pyramid, pcd_pyramid = measure_memory(self.encoder.encode_images,
+            rgb_obs, pcd_obs
+        )
+        # Keep only low-res scale
+        context_feats = einops.rearrange(
+            rgb_feats_pyramid[0],
+            "b ncam c h w -> b (ncam h w) c"
+        )
+        context = pcd_pyramid[0]
+
+        if self._crop_workspace:
+            context, context_feats = self.crop_and_resample_batch(
+                context, 
+                context_feats
+            )
+
         if self._relative:
             pcd_obs, curr_gripper = self.convert2rel(pcd_obs, curr_gripper)
         if gt_trajectory is not None:
@@ -372,19 +437,17 @@ class DiffuserActorNURSA(nn.Module):
         if run_inference:
             return self.compute_trajectory(
                 trajectory_mask,
-                rgb_obs,
-                pcd_obs,
+                context_feats,
+                context,
                 instruction,
                 curr_gripper
             )
         # Normalize all pos
         gt_trajectory = gt_trajectory.clone()
-        pcd_obs = pcd_obs.clone()
+        context = context.clone()
         curr_gripper = curr_gripper.clone()
         gt_trajectory[:, :, :3] = self.normalize_pos(gt_trajectory[:, :, :3])
-        pcd_obs = torch.permute(self.normalize_pos(
-            torch.permute(pcd_obs, [0, 1, 3, 4, 2])
-        ), [0, 1, 4, 2, 3])
+        context = self.normalize_pos(context)
         curr_gripper[..., :3] = self.normalize_pos(curr_gripper[..., :3])
 
         # Convert rotation parametrization
@@ -393,7 +456,7 @@ class DiffuserActorNURSA(nn.Module):
 
         # Prepare inputs
         fixed_inputs = measure_memory(self.encode_inputs,
-            rgb_obs, pcd_obs, instruction, curr_gripper
+            context_feats, context, instruction, curr_gripper
         )
 
         print("fps size", fixed_inputs[5].shape)
@@ -455,7 +518,8 @@ class DiffusionHead(nn.Module):
                  use_instruction=False,
                  rotation_parametrization='quat',
                  nhist=3,
-                 lang_enhanced=False):
+                 lang_enhanced=False,
+                 point_embedding_dim=1000):
         super().__init__()
         self.use_instruction = use_instruction
         self.lang_enhanced = lang_enhanced
@@ -491,13 +555,13 @@ class DiffusionHead(nn.Module):
         ])
 
         # Estimate attends to context (no subsampling)
-        self.cross_attn = NURSATransformer(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
-        self.self_attn = NURSATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=4, use_adaln=True)
+        self.cross_attn = URSATransformer(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
+        self.self_attn = NURSATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=4, use_adaln=True, point_embedding_dim=point_embedding_dim)
         # Specific (non-shared) Output layers:
         # 1. Rotation
         self.rotation_proj = nn.Linear(embedding_dim, embedding_dim)
         if not self.lang_enhanced:
-            self.rotation_self_attn = NURSATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
+            self.rotation_self_attn = NURSATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True, point_embedding_dim=point_embedding_dim)
         else:  # interleave cross-attention to language
             raise NotImplementedError
         
@@ -510,7 +574,7 @@ class DiffusionHead(nn.Module):
         # 2. Position
         self.position_proj = nn.Linear(embedding_dim, embedding_dim)
         if not self.lang_enhanced:
-            self.position_self_attn = NURSATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
+            self.position_self_attn = NURSATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True, point_embedding_dim=point_embedding_dim)
         else:  # interleave cross-attention to language
             raise NotImplementedError
         

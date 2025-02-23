@@ -19,11 +19,11 @@ from engine import BaseTrainTester
 from diffuser_actor.trajectory_optimization.diffuser_actor_nursa import DiffuserActorNURSA
 
 from utils.common_utils import (
-    load_instructions, count_parameters, get_gripper_loc_bounds
+    load_instructions, count_parameters, get_gripper_loc_bounds, apply_to_module, load_max_workspace_points
 )
 
 import wandb
-
+from geo3dattn.model.nursa_transformer.ursa_transformer import NURSATransformer, NURSATransformerEncoder
 
 class Arguments(tap.Tap):
     cameras: Tuple[str, ...] = ("wrist", "left_shoulder", "right_shoulder")
@@ -37,8 +37,8 @@ class Arguments(tap.Tap):
     resume: int = 1
     accumulate_grad_batches: int = 1
     val_freq: int = 500
-    gripper_loc_bounds: Optional[str] = None
-    gripper_loc_bounds_buffer: float = 0.04
+    workspace_bounds = torch.tensor([[-0.8, -0.8,  0.5], [1.2, 0.7, 1.8]])
+    max_workspace_points: Optional[Path] = "max_workspace_points.json"
     eval_only: int = 0
 
     # Training and validation datasets
@@ -84,6 +84,9 @@ class Arguments(tap.Tap):
     relative_action: int = 0
     lang_enhanced: int = 0
     fps_subsampling_factor: int = 5
+    point_embedding_dim: int = 120
+    crop_workspace: int = 0
+
 
 
 class TrainTester(BaseTrainTester):
@@ -162,13 +165,16 @@ class TrainTester(BaseTrainTester):
             num_vis_ins_attn_layers=self.args.num_vis_ins_attn_layers,
             use_instruction=bool(self.args.use_instruction),
             fps_subsampling_factor=self.args.fps_subsampling_factor,
-            gripper_loc_bounds=self.args.gripper_loc_bounds,
+            workspace_bounds=self.args.workspace_bounds,
+            max_workspace_points=self.args.max_workspace_points,
+            crop_workspace=self.args.crop_workspace,
             rotation_parametrization=self.args.rotation_parametrization,
             quaternion_format=self.args.quaternion_format,
             diffusion_timesteps=self.args.diffusion_timesteps,
             nhist=self.args.num_history,
             relative=bool(self.args.relative_action),
-            lang_enhanced=bool(self.args.lang_enhanced)
+            lang_enhanced=bool(self.args.lang_enhanced),
+            point_embedding_dim=self.args.point_embedding_dim
         )
         print("Model parameters:", count_parameters(_model))
 
@@ -437,14 +443,12 @@ if __name__ == '__main__':
     print("Arguments:")
     print(args)
     print("-" * 100)
-    if args.gripper_loc_bounds is None:
-        args.gripper_loc_bounds = np.array([[-2, -2, -2], [2, 2, 2]]) * 1.0
+
+    if args.max_workspace_points is None:
+        args.max_workspace_points = 258013
     else:
-        args.gripper_loc_bounds = get_gripper_loc_bounds(
-            args.gripper_loc_bounds,
-            task=args.tasks[0] if len(args.tasks) == 1 else None,
-            buffer=args.gripper_loc_bounds_buffer,
-        )
+        args.max_workspace_points = load_max_workspace_points(args.max_workspace_points)
+
     log_dir = args.base_log_dir / args.exp_log_dir / args.run_log_dir
     args.log_dir = log_dir
     log_dir.mkdir(exist_ok=True, parents=True)

@@ -254,7 +254,8 @@ class EncoderNURSA(EncoderURSA):
                  num_attn_heads=8,
                  num_vis_ins_attn_layers=2,
                  fps_subsampling_factor=5,
-                 history_as_point=True):
+                 history_as_point=True,
+                 **kwargs):
         super().__init__(
             backbone=backbone,
             image_size=image_size,
@@ -264,7 +265,7 @@ class EncoderNURSA(EncoderURSA):
             num_attn_heads=num_attn_heads,
             num_vis_ins_attn_layers=num_vis_ins_attn_layers,
             fps_subsampling_factor=fps_subsampling_factor,
-            history_as_point=history_as_point
+            history_as_point=history_as_point,
         )
-        self.gripper_context_head = NURSATransformer(embedding_dim, nhead=num_attn_heads, num_layers=3)
+        self.gripper_context_head = NURSATransformer(embedding_dim, nhead=num_attn_heads, num_layers=3, **kwargs)
 
