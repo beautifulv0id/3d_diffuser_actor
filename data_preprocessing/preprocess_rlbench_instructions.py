@@ -21,8 +21,8 @@ TextEncoder = Literal["bert", "clip"]
 
 
 class Arguments(tap.Tap):
-    tasks: Tuple[str, ...]
-    output: Path
+    tasks: Tuple[str, ...] = ("place_cups","close_jar","insert_onto_square_peg","light_bulb_in","meat_off_grill","open_drawer","place_shape_in_shape_sorter","place_wine_at_rack_location","push_buttons","put_groceries_in_cupboard","put_item_in_drawer","put_money_in_safe","reach_and_drag","slide_block_to_color_target","stack_blocks","stack_cups","sweep_to_dustpan_of_size","turn_tap"),
+    output: Path 
     batch_size: int = 10
     encoder: TextEncoder = "clip"
     model_max_length: int = 53
@@ -121,7 +121,7 @@ if __name__ == "__main__":
     )
 
     instructions: Dict[str, Dict[int, torch.Tensor]] = {}
-    tasks = set(args.tasks)
+    tasks = set(list(*args.tasks))
 
     for task in tqdm(tasks):
         task_type = task_file_to_task_class(task)

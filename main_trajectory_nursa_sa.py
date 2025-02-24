@@ -37,7 +37,7 @@ class Arguments(tap.Tap):
     resume: int = 1
     accumulate_grad_batches: int = 1
     val_freq: int = 500
-    workspace_bounds: Optional[Path] = "gripper_loc_bounds.json"
+    workspace_bounds: Optional[Path] = None
     workspace_bounds_buffer: float = 0.04
     max_workspace_points: Optional[Path] = "max_workspace_points.json"
     eval_only: int = 0
@@ -85,6 +85,7 @@ class Arguments(tap.Tap):
     relative_action: int = 0
     lang_enhanced: int = 0
     fps_subsampling_factor: int = 5
+    point_embedding_dim: int = 120
     crop_workspace: int = 0
     history_as_point: int = 1
 
