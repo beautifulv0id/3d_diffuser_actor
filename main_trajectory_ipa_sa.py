@@ -88,6 +88,8 @@ class Arguments(tap.Tap):
     crop_workspace: int = 0
     history_as_point: int = 1
 
+    gpu_stress_test: int = 0
+
 
 
 class TrainTester(BaseTrainTester):

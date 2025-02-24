@@ -548,7 +548,7 @@ class DiffusionHead(nn.Module):
         # 1. Rotation
         self.rotation_proj = nn.Linear(embedding_dim, embedding_dim)
         if not self.lang_enhanced:
-            self.rotation_self_attn = IPATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
+            self.rotation_cross_attn = URSATransformer(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
         else:  # interleave cross-attention to language
             raise NotImplementedError
         
@@ -561,7 +561,7 @@ class DiffusionHead(nn.Module):
         # 2. Position
         self.position_proj = nn.Linear(embedding_dim, embedding_dim)
         if not self.lang_enhanced:
-            self.position_self_attn = IPATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True, point_key_dim=3, point_value_dim=3)
+            self.position_cross_attn = URSATransformer(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
         else:  # interleave cross-attention to language
             raise NotImplementedError
         
@@ -662,14 +662,18 @@ class DiffusionHead(nn.Module):
 
         n_act = trajectory_features.shape[1]
 
-
+        tgt, memory = features[:,:n_act], features[:,n_act:]
+        geometric_args = {
+            'query': trajectory_geometric_args,
+            'key': merge_geometric_args(context_fps_geometric_args, gripper_geometric_args),
+        }
         # Rotation head
         rotation = self.predict_rot(
-            features, geometric_args, time_embs, n_act
+            tgt, memory, geometric_args, time_embs, n_act
         )
         # Position head
         position, position_features = self.predict_pos(
-            features, geometric_args, time_embs, n_act
+            tgt, memory, geometric_args, time_embs, n_act
         )
 
         # Openess head from position head
@@ -692,8 +696,9 @@ class DiffusionHead(nn.Module):
         curr_gripper_feats = self.curr_gripper_emb(curr_gripper_feats).unsqueeze(1)
         return time_feats + curr_gripper_feats
 
-    def predict_pos(self, features, geometric_args, time_embs, n_act):
-        position_features = measure_memory(self.position_self_attn.forward,tgt = features,
+    def predict_pos(self, tgt, memory, geometric_args, time_embs, n_act):
+        position_features = measure_memory(self.position_cross_attn.forward, tgt = tgt,
+                                                     memory = memory,
                                                      geometric_args = geometric_args,
                                                      diff_ts = time_embs)
         position_features = position_features[:,:n_act]
@@ -701,8 +706,9 @@ class DiffusionHead(nn.Module):
         position = self.position_predictor(position_features)
         return position, position_features
 
-    def predict_rot(self, features, geometric_args, time_embs, n_act):
-        rotation_features = measure_memory(self.rotation_self_attn.forward,tgt = features,
+    def predict_rot(self, tgt, memory, geometric_args, time_embs, n_act):
+        rotation_features = measure_memory(self.rotation_cross_attn.forward,tgt = tgt,
+                                                     memory = memory,
                                                      geometric_args = geometric_args,
                                                      diff_ts = time_embs)
         rotation_features = rotation_features[:,:n_act]
