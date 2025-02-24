@@ -16,7 +16,7 @@ interpolation_length=2
 tasks=(open_drawer)
 
 lr=1e-4
-B=8
+B=1
 C=120
 quaternion_format=xyzw
 batch_size_val=12
@@ -39,6 +39,7 @@ use_instruction=1
 relative=0
 crop_workspace=0
 point_embedding_dim=120
+history_as_point=1
 
 # Logging parameters
 base_log_dir="train_logs"
@@ -108,6 +109,7 @@ kwargs="--dataset $dataset \
         --variations ${variations[@]} \
         --lr $lr \
         --num_history $num_history \
+        --history_as_point $history_as_point \
         --cameras left_shoulder right_shoulder wrist front \
         --max_episodes_per_task -1 \
         --quaternion_format $quaternion_format \
@@ -123,5 +125,5 @@ ngpus=$(python3 scripts/helper/count_cuda_devices.py)
 cd ~/3d_diffuser_actor
 echo "Args: "
 echo $kwargs
-CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM main_trajectory_nursa.py $kwargs
+CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM main_trajectory_ipa_sa.py $kwargs
 
