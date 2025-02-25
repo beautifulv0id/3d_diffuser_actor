@@ -176,17 +176,19 @@ class DiffuserActorWoSAURSA(nn.Module):
             )
             out = out[-1]  # keep only last layer's output
 
+            out_pos_ori = out[..., :9]
             # trajectory is the noise perturbed point / the point to optimized
             noisy_traj_p, noisy_trajectory_r = self.flow._6Dvector_to_trans_rot_mat(trajectory)
             # predicted noise / aka update is now by definition of training expressed in local frame!
-            noise_p, noise_r = self.flow._6Dvector_to_trans_rot_mat(out)
+            noise_p, noise_r = self.flow._6Dvector_to_trans_rot_mat(out_pos_ori)
 
             # now we go from local to global!
             d_pt = torch.einsum('...mn,...n->...m', noisy_trajectory_r, noise_p)
             d_rt = noisy_trajectory_r @ noise_r
 
             # this is the updated noise target, expressed in the local frame of the "noisy" trajectory,...
-            out = self.flow._trans_rot_mat_to_6Dvector(d_pt, d_rt)
+            out_pos_ori = self.flow._trans_rot_mat_to_6Dvector(d_pt, d_rt)
+            out[..., :9] = out_pos_ori
 
             pos = self.position_noise_scheduler.step(
                 out[..., :3], t, trajectory[..., :3]
