@@ -4,7 +4,7 @@ main_dir=$(./scripts/get_log_path.sh $config_name)
 dataset="/home/share/3D_attn_felix/Peract_packaged/train/"
 valset="/home/share/3D_attn_felix/Peract_packaged/val/"
 instructions="/home/share/3D_attn_felix/rlbench_instructions/instructions.pkl"
-gripper_loc_bounds="tasks/18_peract_tasks_location_bounds.json"
+max_workspace_points="tasks/max_workspace_points.json"
 
 ngpus=$(python3 scripts/helper/count_cuda_devices.py)
 
@@ -44,6 +44,9 @@ use_center_projection=1
 use_vector_projection=0
 add_center=1
 feature_type="sinusoid"
+crop_workspace=1
+point_embedding_dim=120
+
 
 if [ ${#tasks[@]} -gt 1 ]; then
     task_desc="multitask"
@@ -59,7 +62,9 @@ CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --dataset $dataset \
     --valset $valset \
     --instructions $instructions \
-    --gripper_loc_bounds $gripper_loc_bounds \
+    --max_workspace_points $max_workspace_points \
+    --crop_workspace $crop_workspace \
+    --point_embedding_dim $point_embedding_dim \
     --rot_noise $rot_noise \
     --pos_noise $pos_noise \
     --pcd_noise $pcd_noise \

@@ -16,10 +16,10 @@ from torch.nn import functional as F
 
 from datasets.dataset_engine import RLBenchDataset
 from engine import BaseTrainTester
-from diffuser_actor.trajectory_optimization.diffuser_actor_nursa import DiffuserActorNURSA
+from diffuser_actor.trajectory_optimization.diffuser_actor_ipa_sa import DiffuserActorIPASA
 
 from utils.common_utils import (
-    load_instructions, count_parameters, load_max_workspace_points
+    load_instructions, count_parameters, load_max_workspace_points, get_gripper_loc_bounds
 )
 
 import wandb
@@ -37,7 +37,8 @@ class Arguments(tap.Tap):
     resume: int = 1
     accumulate_grad_batches: int = 1
     val_freq: int = 500
-    workspace_bounds = torch.tensor([[-0.8, -0.8,  0.5], [1.2, 0.7, 1.8]])
+    workspace_bounds: Optional[Path] = "gripper_loc_bounds.json"
+    workspace_bounds_buffer: float = 0.04
     max_workspace_points: Optional[Path] = "max_workspace_points.json"
     eval_only: int = 0
 
@@ -84,8 +85,10 @@ class Arguments(tap.Tap):
     relative_action: int = 0
     lang_enhanced: int = 0
     fps_subsampling_factor: int = 5
-    point_embedding_dim: int = 120
     crop_workspace: int = 0
+    history_as_point: int = 1
+
+    gpu_stress_test: int = 0
 
 
 
@@ -158,7 +161,7 @@ class TrainTester(BaseTrainTester):
     def get_model(self):
         """Initialize the model."""
         # Initialize model with arguments
-        _model = DiffuserActorNURSA(
+        _model = DiffuserActorIPASA(
             backbone=self.args.backbone,
             image_size=tuple(int(x) for x in self.args.image_size.split(",")),
             embedding_dim=self.args.embedding_dim,
@@ -174,7 +177,7 @@ class TrainTester(BaseTrainTester):
             nhist=self.args.num_history,
             relative=bool(self.args.relative_action),
             lang_enhanced=bool(self.args.lang_enhanced),
-            point_embedding_dim=self.args.point_embedding_dim
+            history_as_point=bool(self.args.history_as_point)
         )
         print("Model parameters:", count_parameters(_model))
 
@@ -448,6 +451,15 @@ if __name__ == '__main__':
         args.max_workspace_points = 258013
     else:
         args.max_workspace_points = load_max_workspace_points(args.max_workspace_points)
+
+    if args.workspace_bounds is None:
+        args.workspace_bounds = torch.tensor([[-0.8, -0.8,  0.5], [1.2, 0.7, 1.8]])
+    else:
+        args.workspace_bounds = get_gripper_loc_bounds(args.workspace_bounds,
+            task=args.tasks[0] if len(args.tasks) == 1 else None,
+            buffer=args.workspace_bounds_buffer,
+        )
+
 
     log_dir = args.base_log_dir / args.exp_log_dir / args.run_log_dir
     args.log_dir = log_dir

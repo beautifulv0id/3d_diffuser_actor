@@ -9,14 +9,15 @@ dataset="/home/share/3D_attn_felix/Peract_packaged/train/"
 valset="/home/share/3D_attn_felix/Peract_packaged/val/"
 instructions="/home/share/3D_attn_felix/rlbench_instructions/instructions.pkl"
 max_workspace_points="tasks/max_workspace_points.json"
+workspace_bounds="tasks/18_peract_tasks_location_bounds.json"
 variations=$(seq 0 199)
 
 dense_interpolation=1
 interpolation_length=2
-tasks=(open_drawer)
+tasks=(place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap)
 
 lr=1e-4
-B=8
+B=1
 C=120
 quaternion_format=xyzw
 batch_size_val=12
@@ -38,7 +39,7 @@ rotation_parametrization='6D'
 use_instruction=1
 relative=0
 crop_workspace=0
-point_embedding_dim=120
+history_as_point=1
 
 # Logging parameters
 base_log_dir="train_logs"
@@ -48,7 +49,7 @@ else
     task_desc=${tasks[0]}
 fi
 
-run_log_dir="diffusion_nursa_$task_desc-C$C-B$B-lr$lr-DI$dense_interpolation-$interpolation_length-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-fps$fps_subsampling_factor"
+run_log_dir="diffusion_ipa_sa_$task_desc-C$C-B$B-lr$lr-DI$dense_interpolation-$interpolation_length-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-fps$fps_subsampling_factor"
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -88,8 +89,8 @@ kwargs="--dataset $dataset \
         --use_instruction $use_instruction \
         --rotation_parametrization $rotation_parametrization \
         --max_workspace_points $max_workspace_points \
+        --workspace_bounds $workspace_bounds \
         --crop_workspace $crop_workspace \
-        --point_embedding_dim $point_embedding_dim \
         --relative $relative \
         --num_workers 1 \
         --train_iters $train_iters \
@@ -108,6 +109,7 @@ kwargs="--dataset $dataset \
         --variations ${variations[@]} \
         --lr $lr \
         --num_history $num_history \
+        --history_as_point $history_as_point \
         --cameras left_shoulder right_shoulder wrist front \
         --max_episodes_per_task -1 \
         --quaternion_format $quaternion_format \
@@ -123,5 +125,5 @@ ngpus=$(python3 scripts/helper/count_cuda_devices.py)
 cd ~/3d_diffuser_actor
 echo "Args: "
 echo $kwargs
-CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM main_trajectory_nursa.py $kwargs
+CUDA_LAUNCH_BLOCKING=1 torchrun --nproc_per_node $ngpus --master_port $RANDOM main_trajectory_ipa_sa.py $kwargs
 

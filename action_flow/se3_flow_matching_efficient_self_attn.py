@@ -26,7 +26,9 @@ class SE3FlowMatchingEfficientSelfAttn(nn.Module):
                  feature_res="res3",
                  embedding_dim=60,
                  fps_subsampling_factor=5,
-                 gripper_loc_bounds=None,
+                 workspace_bounds=None,
+                 crop_workspace=False,
+                 max_workspace_points=4000,
                  quaternion_format='xyzw',
                  diffusion_timesteps=100,
                  nhist=3,
@@ -45,12 +47,15 @@ class SE3FlowMatchingEfficientSelfAttn(nn.Module):
                  use_center_projection=True,
                  use_vector_projection=True,
                  add_center=True,
+                 point_embedding_dim=120,
                  ):
         super().__init__()
         self._quaternion_format = quaternion_format
         self._relative = relative
         self._use_normals = use_normals
         self._rot_factor = rot_factor
+        self._crop_workspace = crop_workspace
+        self._max_workspace_points = max_workspace_points
 
         self.feature_pcd_encoder = FeaturePCDEncoder(
             backbone=backbone,
@@ -82,7 +87,8 @@ class SE3FlowMatchingEfficientSelfAttn(nn.Module):
                                          use_center_distance=use_center_distance,
                                          use_center_projection=use_center_projection,
                                          use_vector_projection=use_vector_projection,
-                                         add_center=add_center
+                                         add_center=add_center,
+                                         point_embedding_dim=point_embedding_dim
                                           )
 
         self.model = SE3GraspVectorFieldSelfAttn(
@@ -99,7 +105,15 @@ class SE3FlowMatchingEfficientSelfAttn(nn.Module):
 
 
         self.n_steps = diffusion_timesteps
-        self.gripper_loc_bounds = torch.tensor(gripper_loc_bounds)
+        self.workspace_bounds = nn.Parameter(workspace_bounds, requires_grad=False)
+
+        self.fit_embedding_parameters(point_embedding_dim)
+
+    @torch.no_grad()
+    def fit_embedding_parameters(self, point_embedding_dim):
+        fit_data = torch.rand(point_embedding_dim, 3) * 2 - 1
+        apply_to_module(self, NURSATransformer, lambda x: x.fit_embedding(fit_data))
+        apply_to_module(self, NURSATransformerEncoder, lambda x: x.fit_embedding(fit_data))
 
     # ========= utils  ============
     def vec_to_pose(self, vec):
@@ -115,13 +129,13 @@ class SE3FlowMatchingEfficientSelfAttn(nn.Module):
         return vec
 
     def normalize_pos(self, pos):
-        pos_min = self.gripper_loc_bounds[0].float().to(pos.device)
-        pos_max = self.gripper_loc_bounds[1].float().to(pos.device)
+        pos_min = self.workspace_bounds[0].float().to(pos.device)
+        pos_max = self.workspace_bounds[1].float().to(pos.device)
         return (pos - pos_min) / (pos_max - pos_min) * 2.0 - 1.0
 
     def unnormalize_pos(self, pos):
-        pos_min = self.gripper_loc_bounds[0].float().to(pos.device)
-        pos_max = self.gripper_loc_bounds[1].float().to(pos.device)
+        pos_min = self.workspace_bounds[0].float().to(pos.device)
+        pos_max = self.workspace_bounds[1].float().to(pos.device)
         return (pos + 1.0) / 2.0 * (pos_max - pos_min) + pos_min
 
 
@@ -186,6 +200,52 @@ class SE3FlowMatchingEfficientSelfAttn(nn.Module):
         curr_gripper[..., :3] = curr_gripper[..., :3] - center.view(bs, 1, 3)
         return pcd, curr_gripper
 
+    @torch.no_grad()
+    def crop_and_resample_batch(self, pcd, rgb):
+        """
+        Crop point clouds to a 3D workspace and resample to a fixed size.
+        
+        Args:
+            pcd (torch.Tensor): Input batch of point clouds. Shape: (B, N, 3)
+            rgb (torch.Tensor): Input batch of RGB images. Shape: (B, C, H, W)
+        Returns:
+            torch.Tensor: Processed point clouds with shape (B, max_points, 3)
+        """
+        device = pcd.device
+        B, N, _ = pcd.shape
+
+        min_bound = self.workspace_bounds[0].float()
+        max_bound = self.workspace_bounds[1].float()
+        
+        # Create mask for pcd within workspace
+        mask = (pcd >= min_bound) & (pcd <= max_bound)
+        mask = mask.all(dim=-1)  # (B, N)
+        
+        pcds = []
+        rgbs = []
+        
+        for i in range(B):
+            # Extract valid points for this cloud
+            valid_pcds = pcd[i][mask[i]]  # (K, 3)
+            valid_rgbs = rgb[i][mask[i]]  
+            K = valid_pcds.size(0)
+            if K == 0:
+                raise ValueError(f"All points filtered in cloud {i}. Consider checking bounds or input data.")
+            if K >= self._max_workspace_points:
+                indices = torch.randperm(K, device=device)[:self._max_workspace_points]
+            else:
+                indices = torch.randint(0, K, (self._max_workspace_points,), device=device)
+            
+            # Select points and maintain gradient flow
+            sampled_pcds = valid_pcds[indices]
+            sampled_rgbs = valid_rgbs[indices]
+            pcds.append(sampled_pcds)
+            rgbs.append(sampled_rgbs)
+        
+        pcds = torch.stack(pcds, dim=0)
+        rgbs = torch.stack(rgbs, dim=0)
+        return pcds, rgbs
+
     def forward(
         self,
         gt_trajectory,
@@ -212,6 +272,8 @@ class SE3FlowMatchingEfficientSelfAttn(nn.Module):
         """
         # feature_obs, pcd_obs, normal_obs = self.feature_pcd_encoder(rgb_obs, pcd_obs, normal_obs)
         feature_obs, pcd_obs, normal_obs = measure_memory(self.feature_pcd_encoder.forward, rgb_obs, pcd_obs, normal_obs)
+        if self._crop_workspace:
+            pcd_obs, feature_obs = self.crop_and_resample_batch(pcd_obs, feature_obs)
         if self._relative:
             pcd_obs, curr_gripper = self.convert2rel(pcd_obs, curr_gripper)
         if gt_trajectory is not None:

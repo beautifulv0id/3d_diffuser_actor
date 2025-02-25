@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import einops
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
-from geo3dattn.model.nursa_transformer.ursa_transformer import NURSATransformer, NURSATransformerEncoder
+from geo3dattn.model.nursa_transformer.ursa_transformer import NURSATransformerEncoder
 from geo3dattn.model.ursa_transformer.ursa_transformer import URSATransformer
 from diffuser_actor.utils.encoder_ursa import EncoderURSA
 from diffuser_actor.utils.layers import ParallelAttention
@@ -22,7 +22,7 @@ from diffuser_actor.utils.utils import (
 )
 from utils.common_utils import apply_to_module
 
-class DiffuserActorNURSA(nn.Module):
+class DiffuserActorNURSASA(nn.Module):
 
     def __init__(self,
                  backbone="clip",
@@ -84,10 +84,8 @@ class DiffuserActorNURSA(nn.Module):
 
         self.fit_embedding_parameters(point_embedding_dim)
 
-    @torch.no_grad()
     def fit_embedding_parameters(self, point_embedding_dim):
         fit_data = torch.rand(point_embedding_dim, 3) * 2 - 1
-        apply_to_module(self, NURSATransformer, lambda x: x.fit_embedding(fit_data))
         apply_to_module(self, NURSATransformerEncoder, lambda x: x.fit_embedding(fit_data))
 
     def encode_inputs(self, context_feats, context, instruction,
@@ -122,7 +120,6 @@ class DiffuserActorNURSA(nn.Module):
             fps_feats, fps_pos  # sampled visual features
         )
     
-    @torch.no_grad()
     def crop_and_resample_batch(self, pcd, rgb):
         """
         Crop point clouds to a 3D workspace and resample to a fixed size.
@@ -410,7 +407,7 @@ class DiffuserActorNURSA(nn.Module):
             is ALWAYS expressed as a quaternion form.
             The model converts it to 6D internally if needed.
         """
-        rgb_feats_pyramid, pcd_pyramid = measure_memory(self.encoder.encode_images,
+        rgb_feats_pyramid, pcd_pyramid = self.encoder.encode_images(
             rgb_obs, pcd_obs
         )
         # Keep only low-res scale
@@ -422,8 +419,7 @@ class DiffuserActorNURSA(nn.Module):
 
         if self._crop_workspace:
             context, context_feats = self.crop_and_resample_batch(
-                context, 
-                context_feats
+                context, context_feats
             )
 
         if self._relative:
@@ -458,8 +454,6 @@ class DiffuserActorNURSA(nn.Module):
         fixed_inputs = measure_memory(self.encode_inputs,
             context_feats, context, instruction, curr_gripper
         )
-
-        print("fps size", fixed_inputs[5].shape)
 
         # Condition on start-end pose
         cond_data = torch.zeros_like(gt_trajectory)
@@ -555,7 +549,7 @@ class DiffusionHead(nn.Module):
         ])
 
         # Estimate attends to context (no subsampling)
-        self.cross_attn = URSATransformer(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
+        self.cross_attn = URSATransformer(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True, point_embedding_dim=point_embedding_dim)
         self.self_attn = NURSATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=4, use_adaln=True, point_embedding_dim=point_embedding_dim)
         # Specific (non-shared) Output layers:
         # 1. Rotation

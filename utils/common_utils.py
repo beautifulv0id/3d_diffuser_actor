@@ -4,9 +4,24 @@ from pathlib import Path
 import json
 import torch
 import numpy as np
-
+import torch.nn as nn
 
 Instructions = Dict[str, Dict[int, torch.Tensor]]
+
+def apply_to_module(model: nn.Module, target_module: type, func):
+    """
+    Recursively applies `func` to all instances of `target_module` in `model`.
+    
+    Args:
+        model (nn.Module): The PyTorch model to traverse.
+        target_module (type): The type of module to apply `func` to (e.g., nn.Conv2d).
+        func (callable): A function that takes a module as input and performs an operation.
+    """
+    for name, module in model.named_children():
+        if isinstance(module, target_module):
+            func(module)
+        else:
+            apply_to_module(module, target_module, func)  # Recurse into submodules
 
 
 def round_floats(o):
@@ -36,6 +51,13 @@ def get_gripper_loc_bounds(path: str, buffer: float = 0.0, task: Optional[str] =
     print("Gripper workspace size:", gripper_loc_bounds_max - gripper_loc_bounds_min)
     return gripper_loc_bounds
 
+def load_max_workspace_points(path: str, task = None):
+    max_workspace_points = json.load(open(path, "r"))
+    if task is None:
+        max_workspace_points = np.max(np.stack([np.array(points) for points in max_workspace_points.values()]), axis=0)
+    else:
+        max_workspace_points = np.array(max_workspace_points[task])
+    return max_workspace_points
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
