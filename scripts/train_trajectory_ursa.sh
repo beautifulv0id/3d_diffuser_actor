@@ -16,7 +16,7 @@ cameras="wrist left_shoulder right_shoulder front"
 image_size=256,256
 max_episodes_per_task=100
 instructions=/home/share/3D_attn_felix/rlbench_instructions/instructions.pkl
-variations=$(seq 0 199)
+variations=$(echo {0..199})
 accumulate_grad_batches=1
 gripper_loc_bounds_buffer=0.04
 

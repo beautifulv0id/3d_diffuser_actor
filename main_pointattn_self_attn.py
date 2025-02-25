@@ -85,7 +85,7 @@ class Arguments(tap.Tap):
     rot_factor: float = 1.0
     gripper_depth: int = 2
     decoder_depth: int = 4
-    decoder_dropout: float = 0.2
+    decoder_dropout: float = 0.0
     distance_scale: float = 1.0
     use_adaln: int = 0
     fps_subsampling_factor: int = 1

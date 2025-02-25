@@ -11,8 +11,8 @@
 # REQUIRED: You must set values for these variables
 # ============================================================
 tasks="place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap"  # REQUIRED
-dataset="/home/share/3D_attn_felix/Peract_packaged/train/"  # REQUIRED
-valset="/home/share/3D_attn_felix/Peract_packaged/val/"  # REQUIRED
+dataset="/workspace/data/Peract_packaged/train/"  # REQUIRED
+valset="/workspace/data/Peract_packaged/val/"  # REQUIRED
 
 # ============================================================
 # Optional: You can modify these default values
@@ -20,8 +20,8 @@ valset="/home/share/3D_attn_felix/Peract_packaged/val/"  # REQUIRED
 # RLBench
 cameras="wrist left_shoulder right_shoulder front"
 max_episodes_per_task=100
-instructions=/home/share/3D_attn_felix/rlbench_instructions/instructions.pkl
-variations=$(seq 0 199)
+instructions=/workspace/data/peract/instructions.pkl
+variations=$(echo {0..199})
 accumulate_grad_batches=1
 gripper_loc_bounds=tasks/18_peract_tasks_location_bounds.json
 gripper_loc_bounds_buffer=0.04
@@ -105,6 +105,7 @@ if [ $SLURM_ARRAY_TASK_ID -gt 0 ] || [ -n "$log_dir" ]; then
 else
     echo "$base_log_dir/$main_dir/$run_log_dir" > $LOG_DIR_FILE
 fi
+
 echo "Starting docker container"
 id=$(docker run -dt \
     -e WANDB_API_KEY=$WANDB_API_KEY \
@@ -117,6 +118,7 @@ id=$(docker run -dt \
 # ============================================================
 # Run training command
 # ============================================================
+
 docker exec -t $id /bin/bash -c "source scripts/slurm/startup-hook.sh && cd /workspace/ &&
     CUDA_LAUNCH_BLOCKING=1 torchrun \
     --nproc_per_node $ngpus \

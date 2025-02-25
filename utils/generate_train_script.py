@@ -123,6 +123,7 @@ def get_argument_defaults(arguments_class, args) -> Dict[str, Any]:
             arg_defaults[name] = getattr(arguments_class, name)
 
     arg_defaults["run_log_dir"] = generate_run_log_dir(arg_defaults)
+    arg_defaults["variations"] = '$(echo {0..199})'
             
     return arg_defaults, required_args
 
@@ -225,9 +226,7 @@ def generate_train_sh(arg_defaults: Dict[str, Any], required_args, main_py: str,
             formatted_value = format_value_for_bash(arg_value)
             
             # Handle special cases
-            if arg_name == "variations":
-                script.append(f'{arg_name}'+'=$(seq 0 199)')
-            elif arg_name == "checkpoint":
+            if arg_name == "checkpoint":
                 script.append(f'#{arg_name}="" # Set this value to resume training')
             elif isinstance(arg_value, tuple) or arg_name in ["tasks", "cameras"]:
                 script.append(f'{arg_name}="{formatted_value}"')
@@ -338,16 +337,13 @@ def generate_slurm_sh(arg_defaults: Dict[str, Any], required_args, main_py: str,
             formatted_value = format_value_for_bash(arg_value)
             
             # Handle special cases
-            if arg_name == "variations":
-                script.append(f'{arg_name}'+'=$(seq 0 199)')
-            elif arg_name == "checkpoint":
+            if arg_name == "checkpoint":
                 script.append(f'#{arg_name}="" # Set this value to resume training')
             elif isinstance(arg_value, tuple) or arg_name in ["tasks", "cameras"]:
                 script.append(f'{arg_name}="{formatted_value}"')
             else:
                 script.append(f'{arg_name}={formatted_value}')
         script.append("")
-
 
     script.extend([
         'task_list=($tasks)',
@@ -411,7 +407,7 @@ def generate_slurm_sh(arg_defaults: Dict[str, Any], required_args, main_py: str,
         '    --master_port $RANDOM \\',
         f'    {main_py} \\'
     ])
-    
+
     # Add command line arguments using the variables
     for i, args in enumerate(required_args):
         script.append(f"    --{args} ${{{args}}} \\")
