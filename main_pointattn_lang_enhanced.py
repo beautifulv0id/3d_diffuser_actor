@@ -26,7 +26,7 @@ import wandb
 
 
 class Arguments(tap.Tap):
-    cameras: Tuple[str, ...] = ("wrist", "left_shoulder", "right_shoulder")
+    cameras: Tuple[str, ...] = ("wrist", "left_shoulder", "right_shoulder", "front")
     feature_res: str = "res3"
     max_episodes_per_task: int = 100
     instructions: Optional[Path] = "instructions.pkl"
@@ -44,14 +44,14 @@ class Arguments(tap.Tap):
     # Training and validation datasets
     dataset: Path
     valset: Path
-    dense_interpolation: int = 0
-    interpolation_length: int = 100
+    dense_interpolation: int = 1
+    interpolation_length: int = 2
 
     # Logging to base_log_dir/exp_log_dir/run_log_dir
     base_log_dir: Path = Path(__file__).parent / "train_logs"
     exp_log_dir: str = "exp"
     run_log_dir: str = "run"
-    name: str = 'train_point_attention_lang_enhanced'
+    name: str = 'pointattn_lang_enhanced'
 
     # Main training parameters
     num_workers: int = 1
@@ -76,12 +76,12 @@ class Arguments(tap.Tap):
     embedding_dim: int = 120
     quaternion_format: str = 'wxyz'
     diffusion_timesteps: int = 100
-    keypose_only: int = 0
-    num_history: int = 0
+    keypose_only: int = 1
+    num_history: int = 1
     relative_action: int = 0
     scaling_factor: float = 3.0
     use_normals: int = 0
-    rot_factor: int = 1.0
+    rot_factor: float = 1.0
     gripper_depth: int = 2
     decoder_depth: int = 4
     decoder_dropout: float = 0.2

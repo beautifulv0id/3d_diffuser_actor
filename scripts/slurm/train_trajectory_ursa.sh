@@ -1,5 +1,12 @@
 #!/bin/bash
-
+#SBATCH -t 24:00:00
+#SBATCH -c 4
+#SBATCH --mem=32G
+#SBATCH -p gpu
+#SBATCH --array=0-4%1
+#SBATCH --gres=gpu:1
+#SBATCH --output=train_logs/slurm_logs/%A_train/%a.out
+#SBATCH -J trajectory_ursa
 # ============================================================
 # REQUIRED: You must set values for these variables
 # ============================================================
@@ -24,7 +31,7 @@ gripper_loc_bounds_buffer=0.04
 val_freq=500
 base_log_dir=train_logs
 exp_log_dir=$(./scripts/utils/get_log_path.sh)
-name=train_3d_diffuser_actor
+name=3d_diffuser_actor_ursa
 
 # Training Parameters
 seed=0
@@ -64,6 +71,15 @@ relative_action=0
 lang_enhanced=0
 fps_subsampling_factor=5
 
+task_list=($tasks)
+if [ ${#task_list[@]} -gt 1 ]; then
+    task_desc="multitask"
+else
+    task_desc=${task_list[0]}
+fi
+
+run_log_dir=3d_diffuser_actor__ursa_$task_desc-C$embedding_dim-B$batch_size-lr$lr-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-FPS$fps_subsampling_factor
+
 
 # ============================================================
 # Configuration settings
@@ -72,13 +88,41 @@ ngpus=$(python3 utils/count_cuda_devices.py)
 CUDA_LAUNCH_BLOCKING=1
 
 # ============================================================
+# Set up log directory
+# ============================================================
+LOG_DIR_FILE=~/3d_diffuser_actor/train_logs/slurm_logs/${SLURM_ARRAY_JOB_ID}_train/log_dir.txt
+if [ -n "$log_dir" ] && [ ! -f $LOG_DIR_FILE ]; then
+    echo "$log_dir" > $LOG_DIR_FILE
+fi
+if [ $SLURM_ARRAY_TASK_ID -gt 0 ] || [ -n "$log_dir" ]; then
+    log_dir=$(cat $LOG_DIR_FILE)
+    kwargs="$kwargs --resume 1"
+    if [ -f "$log_dir/last.pth" ]; then
+        kwargs="$kwargs --checkpoint $log_dir/last.pth"
+    fi
+else
+    echo "$base_log_dir/$main_dir/$run_log_dir" > $LOG_DIR_FILE
+fi
+echo "Starting docker container"
+id=$(docker run -dt \
+    -e WANDB_API_KEY=$WANDB_API_KEY \
+    -e WANDB_PROJECT=3d_diffuser_actor_debug \
+    -v ~/3d_diffuser_actor:/workspace \
+    -v ~/pointattention/:/pointattention \
+    -v /home/share/3D_attn_felix/Peract_packaged/:/workspace/data/Peract_packaged/ \
+    -v /home/share/3D_attn_felix/peract/instructions.pkl:/workspace/data/peract/instructions.pkl \
+    --shm-size=32gb oddtoddler400/3d_diffuser_actor:0.0.3)
+# ============================================================
 # Run training command
 # ============================================================
-torchrun --nproc_per_node $ngpus --master_port $RANDOM \
-    main_trajectory.py \
+docker exec -t $id /bin/bash -c "source scripts/slurm/startup-hook.sh && cd /workspace/ &&
+    CUDA_LAUNCH_BLOCKING=1 torchrun \
+    --nproc_per_node $ngpus \
+    --master_port $RANDOM \
+    main_trajectory_ursa.py \
     --dataset ${dataset} \
-    --valset ${valset} \
     --tasks ${tasks} \
+    --valset ${valset} \
     --gripper_loc_bounds ${gripper_loc_bounds} \
     --cameras ${cameras} \
     --image_size ${image_size} \
@@ -91,6 +135,7 @@ torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --base_log_dir ${base_log_dir} \
     --exp_log_dir ${exp_log_dir} \
     --name ${name} \
+    --run_log_dir ${run_log_dir} \
     --seed ${seed} \
     --resume ${resume} \
     --eval_only ${eval_only} \
@@ -122,4 +167,5 @@ torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --relative_action ${relative_action} \
     --lang_enhanced ${lang_enhanced} \
     --fps_subsampling_factor ${fps_subsampling_factor} \
-#    --checkpoint $checkpoint # Set this value to resume training
+#    --checkpoint $checkpoint # Set this value to resume training"
+docker stop $id

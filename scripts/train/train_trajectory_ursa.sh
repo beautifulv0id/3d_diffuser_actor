@@ -24,7 +24,7 @@ gripper_loc_bounds_buffer=0.04
 val_freq=500
 base_log_dir=train_logs
 exp_log_dir=$(./scripts/utils/get_log_path.sh)
-name=train_3d_diffuser_actor
+name=3d_diffuser_actor_ursa
 
 # Training Parameters
 seed=0
@@ -64,6 +64,15 @@ relative_action=0
 lang_enhanced=0
 fps_subsampling_factor=5
 
+task_list=($tasks)
+if [ ${#task_list[@]} -gt 1 ]; then
+    task_desc="multitask"
+else
+    task_desc=${task_list[0]}
+fi
+
+run_log_dir=3d_diffuser_actor__ursa_$task_desc-C$embedding_dim-B$batch_size-lr$lr-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-FPS$fps_subsampling_factor
+
 
 # ============================================================
 # Configuration settings
@@ -75,10 +84,10 @@ CUDA_LAUNCH_BLOCKING=1
 # Run training command
 # ============================================================
 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
-    main_trajectory.py \
+    main_trajectory_ursa.py \
     --dataset ${dataset} \
-    --valset ${valset} \
     --tasks ${tasks} \
+    --valset ${valset} \
     --gripper_loc_bounds ${gripper_loc_bounds} \
     --cameras ${cameras} \
     --image_size ${image_size} \
@@ -91,6 +100,7 @@ torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --base_log_dir ${base_log_dir} \
     --exp_log_dir ${exp_log_dir} \
     --name ${name} \
+    --run_log_dir ${run_log_dir} \
     --seed ${seed} \
     --resume ${resume} \
     --eval_only ${eval_only} \

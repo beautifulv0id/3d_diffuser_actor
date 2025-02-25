@@ -26,7 +26,7 @@ import wandb
 from geo3dattn.model.nursa_transformer.ursa_transformer import NURSATransformer, NURSATransformerEncoder
 
 class Arguments(tap.Tap):
-    cameras: Tuple[str, ...] = ("wrist", "left_shoulder", "right_shoulder")
+    cameras: Tuple[str, ...] = ("wrist", "left_shoulder", "right_shoulder", "front")
     image_size: str = "256,256"
     max_episodes_per_task: int = 100
     instructions: Optional[Path] = "instructions.pkl"
@@ -45,14 +45,14 @@ class Arguments(tap.Tap):
     # Training and validation datasets
     dataset: Path
     valset: Path
-    dense_interpolation: int = 0
-    interpolation_length: int = 100
+    dense_interpolation: int = 1
+    interpolation_length: int = 2
 
     # Logging to base_log_dir/exp_log_dir/run_log_dir
     base_log_dir: Path = Path(__file__).parent / "train_logs"
     exp_log_dir: str = "exp"
     run_log_dir: str = "run"
-    name: str = 'train_3d_diffuser_actor'
+    name: str = '3d_diffuser_actor_nursa_sa'
 
     # Main training parameters
     num_workers: int = 1
@@ -76,12 +76,12 @@ class Arguments(tap.Tap):
     backbone: str = "clip"  # one of "resnet", "clip"
     embedding_dim: int = 120
     num_vis_ins_attn_layers: int = 2
-    use_instruction: int = 0
-    rotation_parametrization: str = 'quat'
+    use_instruction: int = 1
+    rotation_parametrization: str = '6D'
     quaternion_format: str = 'wxyz'
     diffusion_timesteps: int = 100
-    keypose_only: int = 0
-    num_history: int = 0
+    keypose_only: int = 1
+    num_history: int = 1
     relative_action: int = 0
     lang_enhanced: int = 0
     fps_subsampling_factor: int = 5

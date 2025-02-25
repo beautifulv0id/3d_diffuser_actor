@@ -4,7 +4,6 @@
 # REQUIRED: You must set values for these variables
 # ============================================================
 tasks="place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap"  # REQUIRED
-gripper_loc_bounds="tasks/18_peract_tasks_location_bounds.json"  # REQUIRED
 dataset="/home/share/3D_attn_felix/Peract_packaged/train/"  # REQUIRED
 valset="/home/share/3D_attn_felix/Peract_packaged/val/"  # REQUIRED
 
@@ -18,13 +17,14 @@ max_episodes_per_task=100
 instructions=/home/share/3D_attn_felix/rlbench_instructions/instructions.pkl
 variations=$(seq 0 199)
 accumulate_grad_batches=1
+gripper_loc_bounds=tasks/18_peract_tasks_location_bounds.json
 gripper_loc_bounds_buffer=0.04
 
 # Logging
 val_freq=500
-base_log_dir=train_logs
+base_log_dir=/home/stud_herrmann/3d_diffuser_actor/train_logs
 exp_log_dir=$(./scripts/utils/get_log_path.sh)
-name=train_3d_diffuser_actor
+name=3d_diffuser_actor_wo_sa
 
 # Training Parameters
 seed=0
@@ -64,6 +64,15 @@ relative_action=0
 lang_enhanced=0
 fps_subsampling_factor=5
 
+task_list=($tasks)
+if [ ${#task_list[@]} -gt 1 ]; then
+    task_desc="multitask"
+else
+    task_desc=${task_list[0]}
+fi
+
+run_log_dir=3d_diffuser_actor__wo_sa_$task_desc-C$embedding_dim-B$batch_size-lr$lr-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-FPS$fps_subsampling_factor
+
 
 # ============================================================
 # Configuration settings
@@ -75,21 +84,22 @@ CUDA_LAUNCH_BLOCKING=1
 # Run training command
 # ============================================================
 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
-    main_trajectory.py \
-    --dataset ${dataset} \
+    main_trajectory_wo_sa.py \
     --valset ${valset} \
     --tasks ${tasks} \
-    --gripper_loc_bounds ${gripper_loc_bounds} \
+    --dataset ${dataset} \
     --cameras ${cameras} \
     --image_size ${image_size} \
     --max_episodes_per_task ${max_episodes_per_task} \
     --instructions ${instructions} \
     --variations ${variations} \
     --accumulate_grad_batches ${accumulate_grad_batches} \
+    --gripper_loc_bounds ${gripper_loc_bounds} \
     --gripper_loc_bounds_buffer ${gripper_loc_bounds_buffer} \
     --val_freq ${val_freq} \
     --base_log_dir ${base_log_dir} \
     --exp_log_dir ${exp_log_dir} \
+    --run_log_dir ${run_log_dir} \
     --name ${name} \
     --seed ${seed} \
     --resume ${resume} \

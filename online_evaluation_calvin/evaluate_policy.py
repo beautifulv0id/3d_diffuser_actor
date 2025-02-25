@@ -65,13 +65,13 @@ class Arguments(tap.Tap):
     backbone: str = "clip"  # one of "resnet", "clip"
     embedding_dim: int = 120
     num_vis_ins_attn_layers: int = 2
-    use_instruction: int = 0
-    rotation_parametrization: str = 'quat'
+    use_instruction: int = 1
+    rotation_parametrization: str = '6D'
     quaternion_format: str = 'wxyz'
     diffusion_timesteps: int = 100
     lang_enhanced: int = 0
     fps_subsampling_factor: int = 3
-    num_history: int = 0
+    num_history: int = 1
     interpolation_length: int = 2 # the number of steps to reach keypose
 
 
