@@ -96,7 +96,7 @@ class URSATransformerLangEnhanced(nn.Module):
     def __init__(self, num_layers, nhead, d_model, **kwargs):
         super().__init__()
         self.ursa_layers = nn.ModuleList([
-            URSATransformer(num_layers=1, **kwargs) for _ in range(num_layers)
+            URSATransformer(num_layers=1, nhead=nhead, d_model=d_model, **kwargs) for _ in range(num_layers)
         ])
         self.lang_layers = nn.ModuleList([
             ParallelAttention(
@@ -125,7 +125,7 @@ class URSATransformerEncoderLangEnhanced(nn.Module):
     def __init__(self, num_layers, nhead, d_model, **kwargs):
         super().__init__()
         self.ursa_layers = nn.ModuleList([
-            URSATransformerEncoder(num_layers=1, **kwargs) for _ in range(num_layers)
+            URSATransformerEncoder(num_layers=1, nhead=nhead, d_model=d_model, **kwargs) for _ in range(num_layers)
         ])
         self.lang_layers = nn.ModuleList([
             ParallelAttention(

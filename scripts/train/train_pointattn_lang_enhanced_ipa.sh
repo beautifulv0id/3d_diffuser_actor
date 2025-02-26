@@ -13,7 +13,7 @@ valset="$PERACT_DATA/Peract_packaged/val"  # REQUIRED
 # RLBench
 cameras="wrist left_shoulder right_shoulder front"
 max_episodes_per_task=100
-instructions=$PERACT_DATA/instructions.pkl
+instructions=/workspace/data/instructions.pkl
 variations=$(echo {0..199})
 accumulate_grad_batches=1
 gripper_loc_bounds=tasks/18_peract_tasks_location_bounds.json

@@ -16,7 +16,7 @@ from torch.nn import functional as F
 
 from datasets.dataset_engine import RLBenchDataset
 from engine import BaseTrainTester
-from diffuser_actor.trajectory_optimization.diffuser_actor_wo_sa_ursa_local import DiffuserActorWoSAURSA
+from diffuser_actor.trajectory_optimization.diffuser_actor_wo_sa_ursa_local import DiffuserActorWoSAURSALocal
 
 from utils.common_utils import (
     load_instructions, count_parameters, get_gripper_loc_bounds
@@ -155,7 +155,7 @@ class TrainTester(BaseTrainTester):
     def get_model(self):
         """Initialize the model."""
         # Initialize model with arguments
-        _model = DiffuserActorWoSAURSA(
+        _model = DiffuserActorWoSAURSALocal(
             backbone=self.args.backbone,
             image_size=tuple(int(x) for x in self.args.image_size.split(",")),
             embedding_dim=self.args.embedding_dim,

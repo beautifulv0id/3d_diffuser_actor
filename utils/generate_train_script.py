@@ -320,6 +320,11 @@ def generate_slurm_sh(arg_defaults: Dict[str, Any], required_args, main_py: str)
         String containing the bash script
     """
 
+    arg_defaults["dataset"] = "/workspace/data/Peract_packaged/train"
+    arg_defaults["valset"] = "/workspace/data/Peract_packaged/val"
+    arg_defaults["instructions"] = "/workspace/data/instructions.pkl"
+
+
     categorized_args = categorize_arguments(arg_defaults)
     script = ["#!/bin/bash",
         "#SBATCH -t 24:00:00",
@@ -416,7 +421,7 @@ def generate_slurm_sh(arg_defaults: Dict[str, Any], required_args, main_py: str)
     '   -e WANDB_PROJECT=3d_diffuser_actor_debug \\',
     '   -e DIFFUSER_ACTOR_ROOT=/workspace \\',
     '   -e PERACT_DATA=/workspace/data \\',
-    '   -e POINTATTN_ROOT=/pointattn \\',
+    '   -e POINTATTN_ROOT=/pointattention \\',
     '   -v $DIFFUSER_ACTOR_ROOT:/workspace \\',
     '   -v $POINTATTN_ROOT:/pointattention \\',
     '   -v $PERACT_DATA/Peract_packaged/:/workspace/data/Peract_packaged/ \\',

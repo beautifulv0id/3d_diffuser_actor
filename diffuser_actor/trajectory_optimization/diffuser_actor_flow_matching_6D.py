@@ -25,7 +25,7 @@ from diffuser_actor.utils.utils import (
 
 from geo3dattn.policy.se3_flowmatching.common.sixd_se3_flowmatching import SixDSE3Flow
 
-class DiffuserActorFlowMatching(nn.Module):
+class DiffuserActorFlowMatching6D(nn.Module):
 
     def __init__(self,
                  backbone="clip",

@@ -11,12 +11,30 @@ import tap
 
 import json
 
-from diffuser_actor.keypose_optimization.act3d import Act3D
-from diffuser_actor.trajectory_optimization.diffuser_actor import DiffuserActor
+# model imports
 from action_flow.se3_flow_matching import SE3FlowMatching
-from action_flow.se3_flow_matching_self_attn import SE3FlowMatchingSelfAttn
+from action_flow.se3_flow_matching_lang_enhanced_nursa_sa import SE3FlowMatchingNURSASA
 from action_flow.se3_flow_matching_lang_enhanced import SE3FlowMatchingLangEnhanced
+from action_flow.se3_flow_matching_lang_enhanced_sa import SE3FlowMatchingLangEnhancedSA
+from action_flow.se3_flow_matching_lang_enhanced_ipa import SE3FlowMatchingLangEnhancedIPA
+from action_flow.se3_flow_matching_self_attn import SE3FlowMatchingSelfAttn
+from action_flow.se3_flow_matching_lang_enhanced_ipa_sa import SE3FlowMatchingLangEnhancedIPASA
+from action_flow.se3_flow_matching_super_point_encoder import SE3FlowMatchingSuperPointEncoder
 
+from diffuser_actor.trajectory_optimization.diffuser_actor import DiffuserActor
+from diffuser_actor.trajectory_optimization.diffuser_actor_flow_matching import DiffuserActorFlowMatching
+from diffuser_actor.trajectory_optimization.diffuser_actor_flow_matching_6D import DiffuserActorFlowMatching6D
+from diffuser_actor.trajectory_optimization.diffuser_actor_ipa_sa import DiffuserActorIPASA
+from diffuser_actor.trajectory_optimization.diffuser_actor_nursa import DiffuserActorNURSA
+from diffuser_actor.trajectory_optimization.diffuser_actor_nursa_sa import DiffuserActorNURSASA
+from diffuser_actor.trajectory_optimization.diffuser_actor_nursa_sa_local import DiffuserActorNURSASA
+from diffuser_actor.trajectory_optimization.diffuser_actor_ursa import DiffuserActorURSA
+from diffuser_actor.trajectory_optimization.diffuser_actor_wo_sa import DiffuserActorWoSA
+from diffuser_actor.trajectory_optimization.diffuser_actor_wo_sa_nursa import DiffuserActorWoSANURSA
+from diffuser_actor.trajectory_optimization.diffuser_actor_wo_sa_ursa import DiffuserActorWoSAURSA
+from diffuser_actor.trajectory_optimization.diffuser_actor_wo_sa_ursa_flow_matching import DiffuserActorWoSAURSA
+from diffuser_actor.trajectory_optimization.diffuser_actor_wo_sa_ursa_flow_matching_6D import DiffuserActorWoSAURSA6D
+from diffuser_actor.trajectory_optimization.diffuser_actor_wo_sa_ursa_local import DiffuserActorWoSAURSALocal
 
 from utils.common_utils import (
     load_instructions,
@@ -24,7 +42,32 @@ from utils.common_utils import (
     round_floats
 )
 from utils.utils_with_rlbench import RLBenchEnv, Actioner, load_episodes
+import inspect
 
+model_class_dict = {
+    "pointattn": SE3FlowMatching,
+    "pointattn_lang_enhanced_nursa_sa": SE3FlowMatchingNURSASA,
+    "pointattn_lang_enhanced": SE3FlowMatchingLangEnhanced,
+    "pointattn_lang_enhanced_sa": SE3FlowMatchingLangEnhancedSA,
+    "pointattn_lang_enhanced_ipa": SE3FlowMatchingLangEnhancedIPA,
+    "pointattn_self_attn": SE3FlowMatchingSelfAttn,
+    "pointattn_lang_enhanced_ipa_sa": SE3FlowMatchingLangEnhancedIPASA,
+    "pointattn_super_point_encoder": SE3FlowMatchingSuperPointEncoder,    
+    "3d_diffuser_actor": DiffuserActor,
+    "3d_diffuser_actor_flow_matching": DiffuserActorFlowMatching,
+    "3d_diffuser_actor_flow_matching_6D": DiffuserActorFlowMatching6D,
+    "3d_diffuser_actor_ipa_sa": DiffuserActorIPASA,
+    "3d_diffuser_actor_nursa": DiffuserActorNURSA,
+    "3d_diffuser_actor_nursa_sa": DiffuserActorNURSASA,
+    "3d_diffuser_actor_nursa_sa_local": DiffuserActorNURSASA,
+    "3d_diffuser_actor_ursa": DiffuserActorURSA,
+    "3d_diffuser_actor_wo_sa": DiffuserActorWoSA,
+    "3d_diffuser_actor_wo_sa_nursa": DiffuserActorWoSANURSA,
+    "3d_diffuser_actor_wo_sa_ursa": DiffuserActorWoSAURSA,
+    "3d_diffuser_actor_wo_sa_ursa_flow_matching": DiffuserActorWoSAURSA,
+    "3d_diffuser_actor_wo_sa_ursa_flow_matching_6D": DiffuserActorWoSAURSA6D,
+    "3d_diffuser_actor_wo_sa_ursa_local": DiffuserActorWoSAURSALocal,
+}
 
 class Arguments(tap.Tap):
     checkpoint: Path = ""
@@ -51,6 +94,27 @@ class Arguments(tap.Tap):
     hyper_params_file: Path = Path("hparams.json")
     action_dim: int = 8
 
+def get_signature_params(func):
+    sig = inspect.signature(func)
+    
+    # Get parameter names and default values
+    params = {}
+    for name, param in sig.parameters.items():
+        # Store parameter name with its default value (if any)
+        if param.default is not param.empty:
+            params[name] = param.default
+        else:
+            params[name] = None  # No default value
+
+    params.pop('self', None)
+    
+    return params
+
+def get_class_kwargs(func, kwargs):
+    params = get_signature_params(func)
+    return {k: v for k, v in kwargs.items() if k in params}
+
+
 def load_models(args):
     device = torch.device(args.device)
 
@@ -66,90 +130,13 @@ def load_models(args):
         args.gripper_loc_bounds_file,
         task=task, buffer=args.gripper_loc_bounds_buffer,
     )
+    args.gripper_loc_bounds = gripper_loc_bounds
 
-    if args.test_model == "3d_diffuser_actor":
-        model = DiffuserActor(
-            backbone=args.backbone,
-            image_size=tuple(int(x) for x in args.image_size.split(",")),
-            embedding_dim=args.embedding_dim,
-            num_vis_ins_attn_layers=args.num_vis_ins_attn_layers,
-            use_instruction=bool(args.use_instruction),
-            fps_subsampling_factor=args.fps_subsampling_factor,
-            gripper_loc_bounds=gripper_loc_bounds,
-            rotation_parametrization=args.rotation_parametrization,
-            quaternion_format=args.quaternion_format,
-            diffusion_timesteps=args.diffusion_timesteps,
-            nhist=args.num_history,
-            relative=bool(args.relative_action),
-            lang_enhanced=bool(args.lang_enhanced),
-        ).to(device)
-    elif args.test_model == "act3d":
-        model = Act3D(
-            backbone=args.backbone,
-            image_size=tuple(int(x) for x in args.image_size.split(",")),
-            embedding_dim=args.embedding_dim,
-            num_ghost_point_cross_attn_layers=(
-                args.num_ghost_point_cross_attn_layers),
-            num_query_cross_attn_layers=(
-                args.num_query_cross_attn_layers),
-            num_vis_ins_attn_layers=(
-                args.num_vis_ins_attn_layers),
-            rotation_parametrization=args.rotation_parametrization,
-            gripper_loc_bounds=gripper_loc_bounds,
-            num_ghost_points=args.num_ghost_points,
-            num_ghost_points_val=args.num_ghost_points_val,
-            weight_tying=bool(args.weight_tying),
-            gp_emb_tying=bool(args.gp_emb_tying),
-            num_sampling_level=args.num_sampling_level,
-            fine_sampling_ball_diameter=(
-                args.fine_sampling_ball_diameter),
-            regress_position_offset=bool(
-                args.regress_position_offset),
-            use_instruction=bool(args.use_instruction)
-        ).to(device)
-    elif args.test_model == "pointattn":
-        model = SE3FlowMatching(
-            backbone=args.backbone,
-            image_size=tuple(int(x) for x in args.image_size.split(",")),
-            embedding_dim=args.embedding_dim,
-            gripper_loc_bounds=gripper_loc_bounds,
-            quaternion_format=args.quaternion_format,
-            diffusion_timesteps=args.diffusion_timesteps,
-            nhist=args.num_history,
-            relative=bool(args.relative_action)
-        ).to(device)
-    elif args.test_model == "pointattn_self_attn":
-        model = SE3FlowMatchingSelfAttn(
-            backbone=args.backbone,
-            image_size=tuple(int(x) for x in args.image_size.split(",")),
-            embedding_dim=args.embedding_dim,
-            fps_subsampling_factor=args.fps_subsampling_factor,
-            gripper_loc_bounds=gripper_loc_bounds,
-            quaternion_format=args.quaternion_format,
-            diffusion_timesteps=args.diffusion_timesteps,
-            nhist=args.num_history,
-            relative=bool(args.relative_action)
-        ).to(device)
-    elif args.test_model == "pointattn_lang_enhanced":
-        model = SE3FlowMatchingLangEnhanced(
-            backbone=args.backbone,
-            image_size=tuple(int(x) for x in args.image_size.split(",")),
-            embedding_dim=args.embedding_dim,
-            gripper_loc_bounds=gripper_loc_bounds,
-            quaternion_format=args.quaternion_format,
-            diffusion_timesteps=args.diffusion_timesteps,
-            nhist=args.num_history,
-            relative=bool(args.relative_action),
-            rot_factor=args.rot_factor,
-            use_normals=args.use_normals,
-            gripper_depth=args.gripper_depth,
-            decoder_depth=args.decoder_depth,
-            decoder_dropout=args.decoder_dropout,
-            distance_scale=args.distance_scale,
-            use_adaln=args.use_adaln
-        ).to(device)
-    else:
-        raise NotImplementedError
+    model_class = model_class_dict[args.test_model]
+    kwargs = get_class_kwargs(model_class, vars(args))
+    model = model_class(
+        **kwargs
+    ).to(device)
 
     # Load model weights
     model_dict = torch.load(args.checkpoint, map_location="cpu")
@@ -176,6 +163,7 @@ if __name__ == "__main__":
         if not hasattr(args, k):
             setattr(args, k, v)
     args.cameras = tuple(x for y in args.cameras for x in y.split(","))
+    args.image_size = tuple(int(x) for x in args.image_size.split(","))
     print("Arguments:")
     print(args)
     print("-" * 100)
@@ -193,7 +181,7 @@ if __name__ == "__main__":
     # Load RLBench environment
     env = RLBenchEnv(
         data_path=args.data_dir,
-        image_size=[int(x) for x in args.image_size.split(",")],
+        image_size=args.image_size,
         apply_rgb=True,
         apply_pc=True,
         headless=bool(args.headless),
