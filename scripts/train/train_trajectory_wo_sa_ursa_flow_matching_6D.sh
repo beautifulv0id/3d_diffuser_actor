@@ -21,8 +21,8 @@ gripper_loc_bounds=tasks/18_peract_tasks_location_bounds.json
 gripper_loc_bounds_buffer=0.04
 
 # Logging
-val_freq=500
-base_log_dir=/home/stud_herrmann/3d_diffuser_actor/train_logs
+val_freq=2000
+base_log_dir=train_logs
 exp_log_dir=$(./scripts/utils/get_log_path.sh)
 name=3d_diffuser_actor_wo_sa_ursa_flow_matching_6D
 
@@ -84,8 +84,8 @@ CUDA_LAUNCH_BLOCKING=1
 # ============================================================
 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     main_trajectory_wo_sa_ursa_flow_matching_6D.py \
-    --dataset ${dataset} \
     --tasks ${tasks} \
+    --dataset ${dataset} \
     --valset ${valset} \
     --cameras ${cameras} \
     --image_size ${image_size} \

@@ -4,7 +4,7 @@
 #SBATCH --mem=32G
 #SBATCH -p gpu
 #SBATCH --array=0-4%1
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:4
 #SBATCH --output=train_logs/slurm_logs/%A_train/%a.out
 #SBATCH -J 3d_diffuser_actor_nursa_sa_local
 # ============================================================
@@ -27,8 +27,8 @@ accumulate_grad_batches=1
 workspace_bounds_buffer=0.04
 
 # Logging
-val_freq=500
-base_log_dir=/home/stud_herrmann/3d_diffuser_actor/train_logs
+val_freq=2000
+base_log_dir=train_logs
 exp_log_dir=$(./scripts/utils/get_log_path.sh)
 name=3d_diffuser_actor_nursa_sa_local
 
@@ -37,7 +37,7 @@ seed=0
 resume=1
 eval_only=0
 num_workers=1
-batch_size=16
+batch_size=8
 batch_size_val=4
 cache_size=100
 cache_size_val=100
@@ -122,9 +122,9 @@ docker exec -t $id /bin/bash -c "source scripts/slurm/startup-hook.sh && cd /wor
     --nproc_per_node $ngpus \
     --master_port $RANDOM \
     main_trajectory_nursa_sa_local.py \
+    --tasks ${tasks} \
     --dataset ${dataset} \
     --valset ${valset} \
-    --tasks ${tasks} \
     --cameras ${cameras} \
     --image_size ${image_size} \
     --max_episodes_per_task ${max_episodes_per_task} \

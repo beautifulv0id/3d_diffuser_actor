@@ -71,7 +71,7 @@ class Arguments(tap.Tap):
     diffusion_timesteps: int = 100
     lang_enhanced: int = 0
     fps_subsampling_factor: int = 3
-    num_history: int = 1
+    num_history: int = 3
     interpolation_length: int = 2 # the number of steps to reach keypose
 
 

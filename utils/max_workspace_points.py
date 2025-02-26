@@ -25,7 +25,7 @@ class Arguments(tap.Tap):
     checkpoint: Optional[Path] = None
     resume: int = 1
     accumulate_grad_batches: int = 1
-    val_freq: int = 500
+    val_freq: int = 2000
     buffer = 0.2
     min_workspace = torch.tensor([-0.8, -0.8,  0.5])
     max_workspace = torch.tensor([1.2, 0.7, 1.8])
@@ -38,7 +38,7 @@ class Arguments(tap.Tap):
     interpolation_length: int = 2
 
     # Logging to base_log_dir/exp_log_dir/run_log_dir
-    base_log_dir: Path = Path(__file__).parent / "train_logs"
+    base_log_dir: Path = "train_logs"
     exp_log_dir: str = "exp"
     run_log_dir: str = "run"
     name: str = 'train_3d_diffuser_actor'

@@ -19,8 +19,8 @@ variations=$(echo {0..199})
 accumulate_grad_batches=1
 
 # Logging
-val_freq=500
-base_log_dir=/home/stud_herrmann/3d_diffuser_actor/train_logs
+val_freq=2000
+base_log_dir=train_logs
 exp_log_dir=$(./scripts/utils/get_log_path.sh)
 name=3d_diffuser_actor_nursa
 
@@ -86,8 +86,8 @@ CUDA_LAUNCH_BLOCKING=1
 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     main_trajectory_nursa.py \
     --valset ${valset} \
-    --tasks ${tasks} \
     --dataset ${dataset} \
+    --tasks ${tasks} \
     --cameras ${cameras} \
     --image_size ${image_size} \
     --max_episodes_per_task ${max_episodes_per_task} \

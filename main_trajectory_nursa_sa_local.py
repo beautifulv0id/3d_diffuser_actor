@@ -35,7 +35,7 @@ class Arguments(tap.Tap):
     checkpoint: Optional[Path] = None
     resume: int = 1
     accumulate_grad_batches: int = 1
-    val_freq: int = 500
+    val_freq: int = 2000
     workspace_bounds: Optional[Path] = None
     workspace_bounds_buffer: float = 0.04
     max_workspace_points: Optional[Path] = "tasks/max_workspace_points.json"
@@ -48,7 +48,7 @@ class Arguments(tap.Tap):
     interpolation_length: int = 2
 
     # Logging to base_log_dir/exp_log_dir/run_log_dir
-    base_log_dir: Path = Path(__file__).parent / "train_logs"
+    base_log_dir: Path = "train_logs"
     exp_log_dir: str = "exp"
     run_log_dir: str = "run"
     name: str = '3d_diffuser_actor_nursa_sa_local'

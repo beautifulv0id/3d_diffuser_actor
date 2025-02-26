@@ -36,7 +36,7 @@ class Arguments(tap.Tap):
     checkpoint: Optional[Path] = None
     resume: int = 1
     accumulate_grad_batches: int = 1
-    val_freq: int = 500
+    val_freq: int = 2000
     gripper_loc_bounds: Optional[str] = None
     gripper_loc_bounds_buffer: float = 0.04
     eval_only: int = 0
@@ -48,7 +48,7 @@ class Arguments(tap.Tap):
     interpolation_length: int = 2
 
     # Logging to base_log_dir/exp_log_dir/run_log_dir
-    base_log_dir: Path = Path(__file__).parent / "train_logs"
+    base_log_dir: Path = "train_logs"
     exp_log_dir: str = "exp"
     run_log_dir: str = "run"
     name: str = '3d_diffuser_actor_wo_sa_nursa'

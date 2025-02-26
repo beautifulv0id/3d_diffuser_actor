@@ -27,8 +27,8 @@ gripper_loc_bounds=tasks/18_peract_tasks_location_bounds.json
 gripper_loc_bounds_buffer=0.04
 
 # Logging
-val_freq=500
-base_log_dir=/home/stud_herrmann/3d_diffuser_actor/train_logs
+val_freq=2000
+base_log_dir=train_logs
 exp_log_dir=$(./scripts/utils/get_log_path.sh)
 name=pointattn_lang_enhanced
 
@@ -73,7 +73,7 @@ decoder_dropout=0.0
 distance_scale=1.0
 use_adaln=1
 fps_subsampling_factor=1
-gripper_history_as_points=1
+gripper_history_as_points=0
 feature_type=sinusoid
 use_center_distance="1"
 use_center_projection="1"
@@ -129,9 +129,9 @@ docker exec -t $id /bin/bash -c "source scripts/slurm/startup-hook.sh && cd /wor
     --nproc_per_node $ngpus \
     --master_port $RANDOM \
     main_pointattn_lang_enhanced.py \
-    --tasks ${tasks} \
-    --valset ${valset} \
     --dataset ${dataset} \
+    --valset ${valset} \
+    --tasks ${tasks} \
     --cameras ${cameras} \
     --max_episodes_per_task ${max_episodes_per_task} \
     --instructions ${instructions} \

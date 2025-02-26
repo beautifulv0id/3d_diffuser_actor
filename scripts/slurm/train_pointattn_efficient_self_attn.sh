@@ -25,8 +25,8 @@ variations=$(echo {0..199})
 accumulate_grad_batches=1
 
 # Logging
-val_freq=500
-base_log_dir=/home/stud_herrmann/3d_diffuser_actor/train_logs
+val_freq=2000
+base_log_dir=train_logs
 exp_log_dir=$(./scripts/utils/get_log_path.sh)
 name=pointattn_efficient_self_attn
 
@@ -130,9 +130,9 @@ docker exec -t $id /bin/bash -c "source scripts/slurm/startup-hook.sh && cd /wor
     --nproc_per_node $ngpus \
     --master_port $RANDOM \
     main_pointattn_efficient_self_attn.py \
-    --valset ${valset} \
-    --dataset ${dataset} \
     --tasks ${tasks} \
+    --dataset ${dataset} \
+    --valset ${valset} \
     --cameras ${cameras} \
     --max_episodes_per_task ${max_episodes_per_task} \
     --instructions ${instructions} \

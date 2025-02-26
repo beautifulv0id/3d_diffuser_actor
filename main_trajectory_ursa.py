@@ -36,7 +36,7 @@ class Arguments(tap.Tap):
     checkpoint: Optional[Path] = None
     resume: int = 1
     accumulate_grad_batches: int = 1
-    val_freq: int = 500
+    val_freq: int = 2000
     gripper_loc_bounds: Optional[str]
     gripper_loc_bounds_buffer: float = 0.04
     eval_only: int = 0
