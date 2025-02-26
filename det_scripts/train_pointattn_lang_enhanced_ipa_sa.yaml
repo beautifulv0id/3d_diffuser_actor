@@ -20,7 +20,7 @@ bind_mounts:
   - container_path: /workspace/
     host_path: /pfss/mlde/workspaces/mlde_wsp_PI_Chalvatzaki/home/fh36jega/3d_diffuser_actor
   - container_path: /workspace/data/Peract_packaged
-    host_path: /pfss/mlde/workspaces/mlde_wsp_PI_Chalvatzaki/home/fh36jega/data/Peract_packaged
+    host_path: /pfss/mlde/workspaces/mlde_wsp_PI_Chalvatzaki/home/fh36jega/data/peract/Peract_packaged
   - container_path: /workspace/data/peract/instructions.pkl
     host_path: /pfss/mlde/workspaces/mlde_wsp_PI_Chalvatzaki/home/fh36jega/data/peract/instructions.pkl
   - container_path: /pointattention
