@@ -16,17 +16,13 @@ from torch.nn import functional as F
 
 from datasets.dataset_engine import RLBenchDataset
 from engine import BaseTrainTester
-from action_flow.se3_flow_matching_efficient_self_attn import SE3FlowMatchingEfficientSelfAttn
+from action_flow.se3_flow_matching_lang_enhanced_sa import SE3FlowMatchingLangEnhancedSA
 
 from utils.common_utils import (
-    load_instructions, count_parameters, load_max_workspace_points
+    load_instructions, count_parameters, get_gripper_loc_bounds
 )
 
 import wandb
-from torch.nn.parallel import DistributedDataParallel
-from torch.utils.data.dataloader import default_collate
-from tqdm import trange 
-
 
 
 class Arguments(tap.Tap):
@@ -41,8 +37,8 @@ class Arguments(tap.Tap):
     resume: int = 1
     accumulate_grad_batches: int = 1
     val_freq: int = 2000
-    workspace_bounds = torch.tensor([[-0.8, -0.8,  0.5], [1.2, 0.7, 1.8]])
-    max_workspace_points: Optional[Path] = "tasks/max_workspace_points.json"
+    gripper_loc_bounds: Optional[str] = None
+    gripper_loc_bounds_buffer: float = 0.04
     eval_only: int = 0
 
     # Training and validation datasets
@@ -55,14 +51,14 @@ class Arguments(tap.Tap):
     base_log_dir: Path = "train_logs"
     exp_log_dir: str = "exp"
     run_log_dir: str = "run"
-    name: str = 'pointattn_efficient_self_attn'
+    name: str = 'pointattn_lang_enhanced_sa'
 
     # Main training parameters
     num_workers: int = 1
     batch_size: int = 16
     batch_size_val: int = 4
     cache_size: int = 100
-    cache_size_val: int = 100
+    cache_size_val: int = 0
     lr: float = 1e-4
     wd: float = 5e-3  # used only for CALVIN
     train_iters: int = 200_000
@@ -83,7 +79,6 @@ class Arguments(tap.Tap):
     keypose_only: int = 1
     num_history: int = 3
     relative_action: int = 0
-    fps_subsampling_factor: int = 5
     scaling_factor: float = 3.0
     use_normals: int = 0
     rot_factor: float = 1.0
@@ -93,14 +88,12 @@ class Arguments(tap.Tap):
     distance_scale: float = 1.0
     use_adaln: int = 1
     fps_subsampling_factor: int = 1
-    gripper_history_as_points: int = 0
+    gripper_history_as_points: int = 1
     feature_type: str = 'sinusoid'
     use_center_distance: int = 1,
     use_center_projection: int = 1,
     use_vector_projection: int = 1,
     add_center: int = 1
-    point_embedding_dim: int = 120
-    crop_workspace: int = 0
 
 class TrainTester(BaseTrainTester):
     """Train/test a trajectory optimization algorithm."""
@@ -175,13 +168,11 @@ class TrainTester(BaseTrainTester):
     def get_model(self):
         """Initialize the model."""
         # Initialize model with arguments
-        _model = SE3FlowMatchingEfficientSelfAttn(
+        _model = SE3FlowMatchingLangEnhancedSA(
             backbone=self.args.backbone,
             feature_res=args.feature_res,
             embedding_dim=self.args.embedding_dim,
-            workspace_bounds=self.args.workspace_bounds,
-            max_workspace_points=self.args.max_workspace_points,
-            crop_workspace=self.args.crop_workspace,
+            gripper_loc_bounds=self.args.gripper_loc_bounds,
             quaternion_format=self.args.quaternion_format,
             diffusion_timesteps=self.args.diffusion_timesteps,
             nhist=self.args.num_history,
@@ -201,7 +192,6 @@ class TrainTester(BaseTrainTester):
             use_center_projection=bool(self.args.use_center_projection),
             use_vector_projection=bool(self.args.use_vector_projection),
             add_center=bool(self.args.add_center),
-            point_embedding_dim=self.args.point_embedding_dim
         )
         print("Model parameters:", count_parameters(_model))
 
@@ -339,6 +329,7 @@ class TrainTester(BaseTrainTester):
 
         return values.get('val-losses/traj_pos_acc_001', None)
 
+
 def traj_collate_fn(batch):
     keys = [
         "trajectory", "trajectory_mask",
@@ -471,12 +462,14 @@ if __name__ == '__main__':
     print("Arguments:")
     print(args)
     print("-" * 100)
-
-    if args.max_workspace_points is None:
-        args.max_workspace_points = 258013
+    if args.gripper_loc_bounds is None:
+        args.gripper_loc_bounds = np.array([[-2, -2, -2], [2, 2, 2]]) * 1.0
     else:
-        args.max_workspace_points = load_max_workspace_points(args.max_workspace_points)
-
+        args.gripper_loc_bounds = get_gripper_loc_bounds(
+            args.gripper_loc_bounds,
+            task=args.tasks[0] if len(args.tasks) == 1 else None,
+            buffer=args.gripper_loc_bounds_buffer,
+        )
 
     log_dir = args.base_log_dir / args.exp_log_dir / args.run_log_dir
     args.log_dir = log_dir

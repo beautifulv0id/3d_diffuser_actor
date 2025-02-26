@@ -34,7 +34,7 @@ num_workers=1
 batch_size=16
 batch_size_val=4
 cache_size=100
-cache_size_val=100
+cache_size_val=0
 lr=0.0001
 wd=0.005
 train_iters=200000
@@ -85,9 +85,9 @@ CUDA_LAUNCH_BLOCKING=1
 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     main_trajectory_ursa.py \
     --tasks ${tasks} \
-    --gripper_loc_bounds ${gripper_loc_bounds} \
-    --valset ${valset} \
     --dataset ${dataset} \
+    --valset ${valset} \
+    --gripper_loc_bounds ${gripper_loc_bounds} \
     --cameras ${cameras} \
     --image_size ${image_size} \
     --max_episodes_per_task ${max_episodes_per_task} \

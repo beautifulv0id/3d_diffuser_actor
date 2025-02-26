@@ -16,18 +16,22 @@ from torch.nn import functional as F
 
 from datasets.dataset_engine import RLBenchDataset
 from engine import BaseTrainTester
-from diffuser_actor.trajectory_optimization.diffuser_actor_wo_sa_ursa_flow_matching import DiffuserActorWoSAURSA
+from action_flow.se3_flow_matching_lang_enhanced_nursa_sa import SE3FlowMatchingNURSASA
 
 from utils.common_utils import (
-    load_instructions, count_parameters, get_gripper_loc_bounds
+    load_instructions, count_parameters, load_max_workspace_points
 )
 
 import wandb
+from torch.nn.parallel import DistributedDataParallel
+from torch.utils.data.dataloader import default_collate
+from tqdm import trange 
+
 
 
 class Arguments(tap.Tap):
     cameras: Tuple[str, ...] = ("wrist", "left_shoulder", "right_shoulder", "front")
-    image_size: str = "256,256"
+    feature_res: str = "res3"
     max_episodes_per_task: int = 100
     instructions: Optional[Path] = "instructions.pkl"
     seed: int = 0
@@ -37,8 +41,8 @@ class Arguments(tap.Tap):
     resume: int = 1
     accumulate_grad_batches: int = 1
     val_freq: int = 2000
-    gripper_loc_bounds: Optional[str] = None
-    gripper_loc_bounds_buffer: float = 0.04
+    workspace_bounds = torch.tensor([[-0.8, -0.8,  0.5], [1.2, 0.7, 1.8]])
+    max_workspace_points: Optional[Path] = "tasks/max_workspace_points.json"
     eval_only: int = 0
 
     # Training and validation datasets
@@ -51,7 +55,7 @@ class Arguments(tap.Tap):
     base_log_dir: Path = "train_logs"
     exp_log_dir: str = "exp"
     run_log_dir: str = "run"
-    name: str = '3d_diffuser_actor_wo_sa_ursa_flow_matching'
+    name: str = 'pointattn_efficient_self_attn'
 
     # Main training parameters
     num_workers: int = 1
@@ -74,17 +78,29 @@ class Arguments(tap.Tap):
     # Model
     backbone: str = "clip"  # one of "resnet", "clip"
     embedding_dim: int = 120
-    num_vis_ins_attn_layers: int = 2
-    use_instruction: int = 1
-    rotation_parametrization: str = '6D'
     quaternion_format: str = 'wxyz'
     diffusion_timesteps: int = 100
     keypose_only: int = 1
     num_history: int = 3
     relative_action: int = 0
-    lang_enhanced: int = 0
     fps_subsampling_factor: int = 5
-
+    scaling_factor: float = 3.0
+    use_normals: int = 0
+    rot_factor: float = 1.0
+    gripper_depth: int = 2
+    decoder_depth: int = 4
+    decoder_dropout: float = 0.0
+    distance_scale: float = 1.0
+    use_adaln: int = 1
+    fps_subsampling_factor: int = 1
+    gripper_history_as_points: int = 1
+    feature_type: str = 'sinusoid'
+    use_center_distance: int = 1,
+    use_center_projection: int = 1,
+    use_vector_projection: int = 1,
+    add_center: int = 1
+    point_embedding_dim: int = 120
+    crop_workspace: int = 0
 
 class TrainTester(BaseTrainTester):
     """Train/test a trajectory optimization algorithm."""
@@ -127,9 +143,11 @@ class TrainTester(BaseTrainTester):
             return_low_lvl_trajectory=True,
             dense_interpolation=bool(self.args.dense_interpolation),
             interpolation_length=self.args.interpolation_length,
+            use_normals=bool(self.args.use_normals),
             rot_noise=self.args.rot_noise,
             pos_noise=self.args.pos_noise,
             pcd_noise=self.args.pcd_noise,
+            quaternion_format=self.args.quaternion_format,
         )
         test_dataset = RLBenchDataset(
             root=self.args.valset,
@@ -146,29 +164,44 @@ class TrainTester(BaseTrainTester):
             return_low_lvl_trajectory=True,
             dense_interpolation=bool(self.args.dense_interpolation),
             interpolation_length=self.args.interpolation_length,
+            use_normals=bool(self.args.use_normals),
             rot_noise=self.args.rot_noise,
             pos_noise=self.args.pos_noise,
             pcd_noise=self.args.pcd_noise,
+            quaternion_format=self.args.quaternion_format,
         )
         return train_dataset, test_dataset
 
     def get_model(self):
         """Initialize the model."""
         # Initialize model with arguments
-        _model = DiffuserActorWoSAURSA(
+        _model = SE3FlowMatchingNURSASA(
             backbone=self.args.backbone,
-            image_size=tuple(int(x) for x in self.args.image_size.split(",")),
+            feature_res=args.feature_res,
             embedding_dim=self.args.embedding_dim,
-            num_vis_ins_attn_layers=self.args.num_vis_ins_attn_layers,
-            use_instruction=bool(self.args.use_instruction),
-            fps_subsampling_factor=self.args.fps_subsampling_factor,
-            gripper_loc_bounds=self.args.gripper_loc_bounds,
-            rotation_parametrization=self.args.rotation_parametrization,
+            workspace_bounds=self.args.workspace_bounds,
+            max_workspace_points=self.args.max_workspace_points,
+            crop_workspace=self.args.crop_workspace,
             quaternion_format=self.args.quaternion_format,
             diffusion_timesteps=self.args.diffusion_timesteps,
             nhist=self.args.num_history,
             relative=bool(self.args.relative_action),
-            lang_enhanced=bool(self.args.lang_enhanced)
+            scaling_factor=args.scaling_factor,
+            use_normals=bool(self.args.use_normals),
+            rot_factor=self.args.rot_factor,
+            gripper_depth=self.args.gripper_depth,
+            decoder_depth=self.args.decoder_depth,
+            decoder_dropout=self.args.decoder_dropout,
+            distance_scale=self.args.distance_scale,
+            use_adaln=bool(self.args.use_adaln),
+            fps_subsampling_factor=self.args.fps_subsampling_factor,
+            gripper_history_as_points=bool(self.args.gripper_history_as_points),
+            feature_type=self.args.feature_type,
+            use_center_distance=bool(self.args.use_center_distance),
+            use_center_projection=bool(self.args.use_center_projection),
+            use_vector_projection=bool(self.args.use_vector_projection),
+            add_center=bool(self.args.add_center),
+            point_embedding_dim=self.args.point_embedding_dim
         )
         print("Model parameters:", count_parameters(_model))
 
@@ -185,10 +218,8 @@ class TrainTester(BaseTrainTester):
 
         if self.args.keypose_only:
             sample["trajectory"] = sample["trajectory"][:, [-1]]
-            sample["trajectory_mask"] = sample["trajectory_mask"][:, [-1]]
         else:
             sample["trajectory"] = sample["trajectory"][:, 1:]
-            sample["trajectory_mask"] = sample["trajectory_mask"][:, 1:]
 
         # Forward pass
         curr_gripper = (
@@ -197,9 +228,9 @@ class TrainTester(BaseTrainTester):
         )
         out = model(
             sample["trajectory"],
-            sample["trajectory_mask"],
             sample["rgbs"],
             sample["pcds"],
+            sample["normals"],
             sample["instr"],
             curr_gripper
         )
@@ -247,11 +278,12 @@ class TrainTester(BaseTrainTester):
                 sample["curr_gripper"] if self.args.num_history < 1
                 else sample["curr_gripper_history"][:, -self.args.num_history:]
             )
+            normals = sample["normals"].to(device) if sample["normals"] is not None else None
             action = model(
                 sample["trajectory"].to(device),
-                sample["trajectory_mask"].to(device),
                 sample["rgbs"].to(device),
                 sample["pcds"].to(device),
+                normals,
                 sample["instr"].to(device),
                 curr_gripper.to(device),
                 run_inference=True
@@ -307,7 +339,6 @@ class TrainTester(BaseTrainTester):
 
         return values.get('val-losses/traj_pos_acc_001', None)
 
-
 def traj_collate_fn(batch):
     keys = [
         "trajectory", "trajectory_mask",
@@ -320,6 +351,10 @@ def traj_collate_fn(batch):
             for item in batch
         ]) for key in keys
     }
+    if batch[0]["normals"] is not None:
+        ret_dict["normals"] = torch.cat([item["normals"].float() for item in batch])
+    else:
+        ret_dict["normals"] = None
 
     ret_dict["task"] = []
     for item in batch:
@@ -429,7 +464,6 @@ def generate_visualizations(pred, gt, mask, box_size=0.3):
     plt.close()
     return img.transpose(2, 0, 1)
 
-
 if __name__ == '__main__':
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     # Arguments
@@ -437,14 +471,13 @@ if __name__ == '__main__':
     print("Arguments:")
     print(args)
     print("-" * 100)
-    if args.gripper_loc_bounds is None:
-        args.gripper_loc_bounds = np.array([[-2, -2, -2], [2, 2, 2]]) * 1.0
+
+    if args.max_workspace_points is None:
+        args.max_workspace_points = 258013
     else:
-        args.gripper_loc_bounds = get_gripper_loc_bounds(
-            args.gripper_loc_bounds,
-            task=args.tasks[0] if len(args.tasks) == 1 else None,
-            buffer=args.gripper_loc_bounds_buffer,
-        )
+        args.max_workspace_points = load_max_workspace_points(args.max_workspace_points)
+
+
     log_dir = args.base_log_dir / args.exp_log_dir / args.run_log_dir
     args.log_dir = log_dir
     log_dir.mkdir(exist_ok=True, parents=True)

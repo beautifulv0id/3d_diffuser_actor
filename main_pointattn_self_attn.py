@@ -58,7 +58,7 @@ class Arguments(tap.Tap):
     batch_size: int = 16
     batch_size_val: int = 4
     cache_size: int = 100
-    cache_size_val: int = 100
+    cache_size_val: int = 0
     lr: float = 1e-4
     wd: float = 5e-3  # used only for CALVIN
     train_iters: int = 200_000
@@ -89,7 +89,7 @@ class Arguments(tap.Tap):
     distance_scale: float = 1.0
     use_adaln: int = 1
     fps_subsampling_factor: int = 1
-    gripper_history_as_points: int = 0
+    gripper_history_as_points: int = 1
     feature_type: str = 'sinusoid'
     use_center_distance: int = 1,
     use_center_projection: int = 1,

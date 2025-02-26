@@ -1,13 +1,8 @@
 import torch
-import numpy as np
 from datasets.dataset_engine import RLBenchDataset
-from argparse import Namespace
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional
 from pathlib import Path
 import tap
-import json
-import tqdm
-import os
 import torch.nn.functional as F
 import einops
 
@@ -18,18 +13,11 @@ class Arguments(tap.Tap):
     image_size: str = "256,256"
     max_episodes_per_task: int = 100
     instructions: Optional[Path] = "/home/stud_herrmann/3d_diffuser_actor/data/peract/instructions.pkl"
-    seed: int = 0
     tasks: Tuple[str, ...] = ("place_cups","close_jar","insert_onto_square_peg","light_bulb_in","meat_off_grill","open_drawer","place_shape_in_shape_sorter","place_wine_at_rack_location","push_buttons","put_groceries_in_cupboard","put_item_in_drawer","put_money_in_safe","reach_and_drag","slide_block_to_color_target","stack_blocks","stack_cups","sweep_to_dustpan_of_size","turn_tap"),
-    # tasks: Tuple[str, ...] = ("open_drawer",),
     variations: Tuple[int, ...] = (*range(1, 199),)
-    checkpoint: Optional[Path] = None
-    resume: int = 1
-    accumulate_grad_batches: int = 1
-    val_freq: int = 2000
     buffer = 0.2
     min_workspace = torch.tensor([-0.8, -0.8,  0.5])
     max_workspace = torch.tensor([1.2, 0.7, 1.8])
-    eval_only: int = 0
 
     # Training and validation datasets
     dataset: Path = "/home/share/3D_attn_felix/peract/Peract_packaged_normals/train"
@@ -48,11 +36,6 @@ class Arguments(tap.Tap):
     batch_size: int = 16
     batch_size_val: int = 4
     cache_size: int = 100
-    cache_size_val: int = 100
-    lr: float = 1e-4
-    wd: float = 5e-3  # used only for CALVIN
-    train_iters: int = 200_000
-    val_iters: int = -1  # -1 means heuristically-defined
     max_episode_length: int = 5  # -1 for no limit
 
     # Data augmentations
@@ -61,31 +44,11 @@ class Arguments(tap.Tap):
     pcd_noise: float = 0.0
     image_rescale: str = "0.75,1.25"  # (min, max), "1.0,1.0" for no rescaling
 
-    # Model
-    backbone: str = "clip"  # one of "resnet", "clip"
-    embedding_dim: int = 120
-    num_vis_ins_attn_layers: int = 2
-    use_instruction: int = 1
-    rotation_parametrization: str = 'quat'
-    quaternion_format: str = 'wxyz'
-    diffusion_timesteps: int = 100
-    keypose_only: int = 1
-    num_history: int = 3
-    relative_action: int = 0
-    lang_enhanced: int = 0
-    fps_subsampling_factor: int = 5
-    point_embedding_dim: int = 120
 
 
 
 def get_datasets(args):
     """Initialize datasets."""
-    # Load instruction, based on which we load tasks/variations
-    # instruction = load_instructions(
-    #     args.instructions,
-    #     tasks=args.tasks,
-    #     variations=args.variations
-    # )
     taskvar = [
         (task, var)
         for task in args.tasks

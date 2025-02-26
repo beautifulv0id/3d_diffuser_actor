@@ -11,10 +11,10 @@ tasks=$1
 id=$(docker run -dt \
     -e WANDB_API_KEY=$WANDB_API_KEY \
     -e WANDB_PROJECT=3d_diffuser_actor_debug \
-    -v ~/3d_diffuser_actor:/workspace \
-    -v ~/pointattention/:/pointattention \
-    -v /home/share/3D_attn_felix/Peract_packaged/:/workspace/data/Peract_packaged/ \
-    -v /home/share/3D_attn_felix/peract/instructions.pkl:/workspace/data/peract/instructions.pkl \
+    -v $DIFFUSER_ACTOR_ROOT:/workspace \
+    -v $POINTATTN_ROOT:/pointattention \
+    -v $PERACT_DATA/Peract_packaged/:/workspace/data/Peract_packaged/ \
+    -v $PERACT_DATA/instructions.pkl:/workspace/data/peract/instructions.pkl \
     --shm-size=16gb oddtoddler400/3d_diffuser_actor:0.0.3)
 
 echo "Container ID: $id"

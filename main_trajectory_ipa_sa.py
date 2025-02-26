@@ -59,7 +59,7 @@ class Arguments(tap.Tap):
     batch_size: int = 16
     batch_size_val: int = 4
     cache_size: int = 100
-    cache_size_val: int = 100
+    cache_size_val: int = 0
     lr: float = 1e-4
     wd: float = 5e-3  # used only for CALVIN
     train_iters: int = 200_000

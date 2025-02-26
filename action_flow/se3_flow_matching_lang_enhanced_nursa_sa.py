@@ -4,48 +4,93 @@ import torch.nn.functional as F
 import einops
 from diffuser_actor.utils.encoder import Encoder
 from diffuser_actor.utils.layers import ParallelAttention
+import pytorch3d.ops.sample_farthest_points as fps
 from diffuser_actor.utils.utils import (
     normalise_quat,
     matrix_to_quaternion,
-    quaternion_to_matrix
+    quaternion_to_matrix,
+    measure_memory
 )
 from action_flow.utils.geometry import se3_from_rot_pos
-from action_flow.utils.encoder import SE3GraspFPSSuperEncoder, FeaturePCDEncoder
+from action_flow.utils.encoder import SE3GraspFPSEncoder, FeaturePCDEncoder
 from action_flow.utils.se3_grasp_vector_field import SE3GraspVectorFieldSelfAttn
-from action_flow.utils.decoder import SE3PCDSelfAttnDecoder
+from action_flow.utils.decoder import SE3PCDEfficientSelfAttnDecoder
 
 from geo3dattn.policy.se3_flowmatching.common.se3_flowmatching import RectifiedLinearFlow
 
-class SE3FlowMatchingSelfAttnSuperPoinEncoder(nn.Module):
+
+class SE3FlowMatchingNURSASA(nn.Module):
 
     def __init__(self,
                  backbone="clip",
                  feature_res="res3",
                  embedding_dim=60,
                  fps_subsampling_factor=5,
-                 gripper_loc_bounds=None,
+                 workspace_bounds=None,
+                 crop_workspace=False,
+                 max_workspace_points=4000,
                  quaternion_format='xyzw',
                  diffusion_timesteps=100,
                  nhist=3,
                  relative=False,
-                 scaling_factor=3.0,):
+                 scaling_factor=3.0,
+                 rot_factor=2.0,
+                 use_normals=False,
+                 gripper_depth=2,
+                 decoder_depth=2,
+                 decoder_dropout=0.2,
+                 distance_scale=1.0,
+                 use_adaln=False,
+                 gripper_history_as_points=False,
+                 feature_type='sinusoid',
+                 use_center_distance=True,
+                 use_center_projection=True,
+                 use_vector_projection=True,
+                 add_center=True,
+                 point_embedding_dim=120,
+                 ):
         super().__init__()
         self._quaternion_format = quaternion_format
         self._relative = relative
+        self._use_normals = use_normals
+        self._rot_factor = rot_factor
+        self._crop_workspace = crop_workspace
+        self._max_workspace_points = max_workspace_points
+
         self.feature_pcd_encoder = FeaturePCDEncoder(
             backbone=backbone,
             feature_res=feature_res,
             embedding_dim=embedding_dim
             )
-        encoder = SE3GraspFPSSuperEncoder(
+        encoder = SE3GraspFPSEncoder(
             dim_features=embedding_dim,
-            depth=6,
+            gripper_depth=gripper_depth,
             nheads=8,
-            fps_subsampling_factor=fps_subsampling_factor,
+            n_steps_inf=diffusion_timesteps,
             nhist=nhist,
-            dim_pcd_features=embedding_dim
+            gripper_history_as_points=gripper_history_as_points,
+            feature_type=feature_type,
+            use_adaln=use_adaln,
+            use_center_distance=use_center_distance,
+            use_center_projection=use_center_projection,
+            use_vector_projection=use_vector_projection,
+            add_center=add_center,
+            fps_subsampling_factor=fps_subsampling_factor
         )
-        decoder = SE3PCDSelfAttnDecoder(embedding_dim=embedding_dim)
+        decoder = SE3PCDEfficientSelfAttnDecoder(embedding_dim=embedding_dim,
+                                         x1_depth=1,
+                                         s_depth=decoder_depth,
+                                         x2_depth=1,
+                                         dropout=decoder_dropout,
+                                         distance_scale=distance_scale,
+                                         use_adaln=use_adaln,
+                                         use_center_distance=use_center_distance,
+                                         use_center_projection=use_center_projection,
+                                         use_vector_projection=use_vector_projection,
+                                         add_center=add_center,
+                                         point_embedding_dim=point_embedding_dim
+                                          )
+
         self.model = SE3GraspVectorFieldSelfAttn(
             encoder=encoder, 
             decoder=decoder, 
@@ -60,7 +105,15 @@ class SE3FlowMatchingSelfAttnSuperPoinEncoder(nn.Module):
 
 
         self.n_steps = diffusion_timesteps
-        self.gripper_loc_bounds = torch.tensor(gripper_loc_bounds)
+        self.workspace_bounds = nn.Parameter(workspace_bounds, requires_grad=False)
+
+        self.fit_embedding_parameters(point_embedding_dim)
+
+    @torch.no_grad()
+    def fit_embedding_parameters(self, point_embedding_dim):
+        fit_data = torch.rand(point_embedding_dim, 3) * 2 - 1
+        apply_to_module(self, NURSATransformer, lambda x: x.fit_embedding(fit_data))
+        apply_to_module(self, NURSATransformerEncoder, lambda x: x.fit_embedding(fit_data))
 
     # ========= utils  ============
     def vec_to_pose(self, vec):
@@ -76,13 +129,13 @@ class SE3FlowMatchingSelfAttnSuperPoinEncoder(nn.Module):
         return vec
 
     def normalize_pos(self, pos):
-        pos_min = self.gripper_loc_bounds[0].float().to(pos.device)
-        pos_max = self.gripper_loc_bounds[1].float().to(pos.device)
+        pos_min = self.workspace_bounds[0].float().to(pos.device)
+        pos_max = self.workspace_bounds[1].float().to(pos.device)
         return (pos - pos_min) / (pos_max - pos_min) * 2.0 - 1.0
 
     def unnormalize_pos(self, pos):
-        pos_min = self.gripper_loc_bounds[0].float().to(pos.device)
-        pos_max = self.gripper_loc_bounds[1].float().to(pos.device)
+        pos_min = self.workspace_bounds[0].float().to(pos.device)
+        pos_max = self.workspace_bounds[1].float().to(pos.device)
         return (pos + 1.0) / 2.0 * (pos_max - pos_min) + pos_min
 
 
@@ -147,11 +200,58 @@ class SE3FlowMatchingSelfAttnSuperPoinEncoder(nn.Module):
         curr_gripper[..., :3] = curr_gripper[..., :3] - center.view(bs, 1, 3)
         return pcd, curr_gripper
 
+    @torch.no_grad()
+    def crop_and_resample_batch(self, pcd, rgb):
+        """
+        Crop point clouds to a 3D workspace and resample to a fixed size.
+        
+        Args:
+            pcd (torch.Tensor): Input batch of point clouds. Shape: (B, N, 3)
+            rgb (torch.Tensor): Input batch of RGB images. Shape: (B, C, H, W)
+        Returns:
+            torch.Tensor: Processed point clouds with shape (B, max_points, 3)
+        """
+        device = pcd.device
+        B, N, _ = pcd.shape
+
+        min_bound = self.workspace_bounds[0].float()
+        max_bound = self.workspace_bounds[1].float()
+        
+        # Create mask for pcd within workspace
+        mask = (pcd >= min_bound) & (pcd <= max_bound)
+        mask = mask.all(dim=-1)  # (B, N)
+        
+        pcds = []
+        rgbs = []
+        
+        for i in range(B):
+            # Extract valid points for this cloud
+            valid_pcds = pcd[i][mask[i]]  # (K, 3)
+            valid_rgbs = rgb[i][mask[i]]  
+            K = valid_pcds.size(0)
+            if K == 0:
+                raise ValueError(f"All points filtered in cloud {i}. Consider checking bounds or input data.")
+            if K >= self._max_workspace_points:
+                indices = torch.randperm(K, device=device)[:self._max_workspace_points]
+            else:
+                indices = torch.randint(0, K, (self._max_workspace_points,), device=device)
+            
+            # Select points and maintain gradient flow
+            sampled_pcds = valid_pcds[indices]
+            sampled_rgbs = valid_rgbs[indices]
+            pcds.append(sampled_pcds)
+            rgbs.append(sampled_rgbs)
+        
+        pcds = torch.stack(pcds, dim=0)
+        rgbs = torch.stack(rgbs, dim=0)
+        return pcds, rgbs
+
     def forward(
         self,
         gt_trajectory,
         rgb_obs,
         pcd_obs,
+        normal_obs,
         instruction,
         curr_gripper,
         run_inference=False
@@ -170,7 +270,10 @@ class SE3FlowMatchingSelfAttnSuperPoinEncoder(nn.Module):
             is ALWAYS expressed as a quaternion form.
             The model converts it to 6D internally if needed.
         """
-        feature_obs, pcd_obs = self.feature_pcd_encoder(rgb_obs, pcd_obs)
+        # feature_obs, pcd_obs, normal_obs = self.feature_pcd_encoder(rgb_obs, pcd_obs, normal_obs)
+        feature_obs, pcd_obs, normal_obs = measure_memory(self.feature_pcd_encoder.forward, rgb_obs, pcd_obs, normal_obs)
+        if self._crop_workspace:
+            pcd_obs, feature_obs = self.crop_and_resample_batch(pcd_obs, feature_obs)
         if self._relative:
             pcd_obs, curr_gripper = self.convert2rel(pcd_obs, curr_gripper)
         if gt_trajectory is not None:
@@ -194,6 +297,7 @@ class SE3FlowMatchingSelfAttnSuperPoinEncoder(nn.Module):
 
         obs = {
             'pcd': pcd_obs,
+            'normals': normal_obs,
             'current_gripper': curr_gripper,
             'pcd_features': feature_obs,
             'instruction': instruction
@@ -217,17 +321,18 @@ class SE3FlowMatchingSelfAttnSuperPoinEncoder(nn.Module):
         target = self.flow.vector_field_at_t(a0, a1, at, time)
 
         ## 3. Set Context
-        self.model.set_context(*self.model.encode_obs(obs))
+        self.model.set_context(*measure_memory(self.model.encode_obs, obs))
+
 
         # Predict the noise residual
         at_pose = self.vec_to_pose(at)
         input_data = {'act': at_pose, 'time': time}
-        d_act, openess = self.model.forward_act(input_data)
+        d_act, openess = measure_memory(self.model.forward_act, input_data)
 
         # Compute loss
         loss = (
                 30 * F.l1_loss(d_act[...,:3], target[...,:3], reduction='mean')
-                + 10 * F.l1_loss(d_act[..., 3:6], target[..., 3:6], reduction='mean')
+                + self._rot_factor * 10 * F.l1_loss(d_act[..., 3:6], target[..., 3:6], reduction='mean')
         )
         if torch.numel(gt_openess) > 0:
             loss += F.binary_cross_entropy(openess, gt_openess)

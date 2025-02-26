@@ -25,6 +25,25 @@ naming_dict = {
     "use_adaln": "ADALN",
 }
 
+TASKS = 'place_cups \
+        close_jar \
+        insert_onto_square_peg \
+        light_bulb_in \
+        meat_off_grill \
+        open_drawer \
+        place_shape_in_shape_sorter \
+        place_wine_at_rack_location \
+        push_buttons \
+        put_groceries_in_cupboard \
+        put_item_in_drawer \
+        put_money_in_safe \
+        reach_and_drag \
+        slide_block_to_color_target \
+        stack_blocks \
+        stack_cups \
+        sweep_to_dustpan_of_size \
+        turn_tap'
+
 def load_arguments_class(file_path: str):
     """
     Dynamically load the Arguments class from the given file.
@@ -126,6 +145,10 @@ def get_argument_defaults(arguments_class, args) -> Dict[str, Any]:
 
     arg_defaults["run_log_dir"] = generate_run_log_dir(arg_defaults)
     arg_defaults["variations"] = '$(echo {0..199})'
+    arg_defaults["tasks"] = TASKS
+    arg_defaults["dataset"] = "$PERACT_DATA/train"
+    arg_defaults["valset"] = "$PERACT_DATA/val"
+    arg_defaults["instructions"] = "$PERACT_DATA/instructions.pkl"
             
     return arg_defaults, required_args
 
@@ -285,7 +308,7 @@ def generate_train_sh(arg_defaults: Dict[str, Any], required_args, main_py: str,
     
     return "\n".join(script)
 
-def generate_slurm_sh(arg_defaults: Dict[str, Any], required_args, main_py: str, volumes = []) -> str:
+def generate_slurm_sh(arg_defaults: Dict[str, Any], required_args, main_py: str) -> str:
     """
     Generate a train.sh script with all arguments defined as variables.
     
@@ -296,9 +319,6 @@ def generate_slurm_sh(arg_defaults: Dict[str, Any], required_args, main_py: str,
     Returns:
         String containing the bash script
     """
-    arg_defaults["dataset"] = "/workspace/data/Peract_packaged/train"
-    arg_defaults["valset"] = "/workspace/data/Peract_packaged/val"
-    arg_defaults["instructions"] = "/workspace/data/peract/instructions.pkl"
 
     categorized_args = categorize_arguments(arg_defaults)
     script = ["#!/bin/bash",
@@ -308,7 +328,7 @@ def generate_slurm_sh(arg_defaults: Dict[str, Any], required_args, main_py: str,
         "#SBATCH -p gpu",
         "#SBATCH --array=0-4%1",
         "#SBATCH --gres=gpu:1",
-        "#SBATCH --output=train_logs/slurm_logs/%A_train/%a.out",
+        f"#SBATCH --output=train_logs/slurm_logs/%A_{arg_defaults['name']}/%a.out",
         f"#SBATCH -J {arg_defaults['name']}",]
     
     # Add comment about required arguments
@@ -376,7 +396,7 @@ def generate_slurm_sh(arg_defaults: Dict[str, Any], required_args, main_py: str,
     script.extend(["# ============================================================",
         "# Set up log directory",
         "# ============================================================",
-        'LOG_DIR_FILE=~/3d_diffuser_actor/train_logs/slurm_logs/${SLURM_ARRAY_JOB_ID}_train/log_dir.txt',
+        'LOG_DIR_FILE=~/3d_diffuser_actor/train_logs/slurm_logs/${SLURM_ARRAY_JOB_ID}'+f'_{arg_defaults["name"]}/log_dir.txt',
         'if [ -n "$log_dir" ] && [ ! -f $LOG_DIR_FILE ]; then',
         '    echo "$log_dir" > $LOG_DIR_FILE',
         'fi',
@@ -392,15 +412,16 @@ def generate_slurm_sh(arg_defaults: Dict[str, Any], required_args, main_py: str,
 
     script.extend(['echo "Starting docker container"',
     'id=$(docker run -dt \\',
-    '    -e WANDB_API_KEY=$WANDB_API_KEY \\',
-    '    -e WANDB_PROJECT=3d_diffuser_actor_debug \\' ])
-
-    script.extend([
-    f'    -v {volume} \\' for volume in volumes
-    ])
-
-    script.extend([
-    '    --shm-size=32gb oddtoddler400/3d_diffuser_actor:0.0.3)'])
+    '   -e WANDB_API_KEY=$WANDB_API_KEY \\',
+    '   -e WANDB_PROJECT=3d_diffuser_actor_debug \\',
+    '   -e DIFFUSER_ACTOR_ROOT=/workspace \\',
+    '   -e PERACT_DATA=/workspace/data \\',
+    '   -e POINTATTN_ROOT=/pointattn \\',
+    '   -v $DIFFUSER_ACTOR_ROOT:/workspace \\',
+    '   -v $POINTATTN_ROOT:/pointattention \\',
+    '   -v $PERACT_DATA/Peract_packaged/:/workspace/data/Peract_packaged/ \\',
+    '   -v $PERACT_DATA/instructions.pkl:/workspace/data/instructions.pkl \\',
+    '   --shm-size=32gb oddtoddler400/3d_diffuser_actor:0.0.3)'])
 
     
     script.extend([
@@ -473,12 +494,7 @@ def main():
     parser.add_argument("--template", help="Path to template train.sh file for example values")
     parser.add_argument("--output_dir", default="scripts", help="Output file path")
     parser.add_argument("--output", default="train.sh", help="Output file path")
-    parser.add_argument("--gripper_loc_bounds", default=None, help="Gripper location bounds")
-    parser.add_argument("--instructions", default=None, help="Instructions")
-    parser.add_argument("--dataset", default=None, help="Dataset")
-    parser.add_argument("--valset", default=None, help="Validation set")
     parser.add_argument("--tasks", default=None, nargs="+", help="Tasks")
-    parser.add_argument("--volumes", default=None, nargs="+", help="Volumes")
         
     args = parser.parse_args()
 
@@ -499,7 +515,7 @@ def main():
     print(f"Generating {args.output}")
 
     train_sh = generate_train_sh(arg_defaults, required_args, args.main_py, example_values)
-    slurm_sh = generate_slurm_sh(arg_defaults, required_args, args.main_py, args.volumes)
+    slurm_sh = generate_slurm_sh(arg_defaults, required_args, args.main_py)
     
     train_output_path = Path(args.output_dir) / "train" / args.output
     slurm_output_path = Path(args.output_dir) / "slurm" / args.output

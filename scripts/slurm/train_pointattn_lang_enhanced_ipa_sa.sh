@@ -5,14 +5,14 @@
 #SBATCH -p gpu
 #SBATCH --array=0-4%1
 #SBATCH --gres=gpu:1
-#SBATCH --output=train_logs/slurm_logs/%A_train/%a.out
+#SBATCH --output=train_logs/slurm_logs/%A_pointattn_lang_enhanced_ipa_sa/%a.out
 #SBATCH -J pointattn_lang_enhanced_ipa_sa
 # ============================================================
 # REQUIRED: You must set values for these variables
 # ============================================================
 tasks="place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap"  # REQUIRED
-dataset="/workspace/data/Peract_packaged/train"  # REQUIRED
-valset="/workspace/data/Peract_packaged/val"  # REQUIRED
+dataset="$PERACT_DATA/train"  # REQUIRED
+valset="$PERACT_DATA/val"  # REQUIRED
 
 # ============================================================
 # Optional: You can modify these default values
@@ -20,7 +20,7 @@ valset="/workspace/data/Peract_packaged/val"  # REQUIRED
 # RLBench
 cameras="wrist left_shoulder right_shoulder front"
 max_episodes_per_task=100
-instructions=/workspace/data/peract/instructions.pkl
+instructions=$PERACT_DATA/instructions.pkl
 variations=$(echo {0..199})
 accumulate_grad_batches=1
 gripper_loc_bounds=tasks/18_peract_tasks_location_bounds.json
@@ -40,7 +40,7 @@ num_workers=1
 batch_size=16
 batch_size_val=4
 cache_size=100
-cache_size_val=100
+cache_size_val=0
 lr=0.0001
 wd=0.005
 train_iters=200000
@@ -93,7 +93,7 @@ CUDA_LAUNCH_BLOCKING=1
 # ============================================================
 # Set up log directory
 # ============================================================
-LOG_DIR_FILE=~/3d_diffuser_actor/train_logs/slurm_logs/${SLURM_ARRAY_JOB_ID}_train/log_dir.txt
+LOG_DIR_FILE=~/3d_diffuser_actor/train_logs/slurm_logs/${SLURM_ARRAY_JOB_ID}_pointattn_lang_enhanced_ipa_sa/log_dir.txt
 if [ -n "$log_dir" ] && [ ! -f $LOG_DIR_FILE ]; then
     echo "$log_dir" > $LOG_DIR_FILE
 fi
@@ -108,13 +108,16 @@ else
 fi
 echo "Starting docker container"
 id=$(docker run -dt \
-    -e WANDB_API_KEY=$WANDB_API_KEY \
-    -e WANDB_PROJECT=3d_diffuser_actor_debug \
-    -v ~/3d_diffuser_actor:/workspace \
-    -v ~/pointattention/:/pointattention \
-    -v /home/share/3D_attn_felix/Peract_packaged/:/workspace/data/Peract_packaged/ \
-    -v /home/share/3D_attn_felix/peract/instructions.pkl:/workspace/data/peract/instructions.pkl \
-    --shm-size=32gb oddtoddler400/3d_diffuser_actor:0.0.3)
+   -e WANDB_API_KEY=$WANDB_API_KEY \
+   -e WANDB_PROJECT=3d_diffuser_actor_debug \
+   -e DIFFUSER_ACTOR_ROOT=/workspace \
+   -e PERACT_DATA=/workspace/data \
+   -e POINTATTN_ROOT=/pointattn \
+   -v $DIFFUSER_ACTOR_ROOT:/workspace \
+   -v $POINTATTN_ROOT:/pointattention \
+   -v $PERACT_DATA/Peract_packaged/:/workspace/data/Peract_packaged/ \
+   -v $PERACT_DATA/instructions.pkl:/workspace/data/instructions.pkl \
+   --shm-size=32gb oddtoddler400/3d_diffuser_actor:0.0.3)
 # ============================================================
 # Run training command
 # ============================================================
@@ -123,9 +126,9 @@ docker exec -t $id /bin/bash -c "source scripts/slurm/startup-hook.sh && cd /wor
     --nproc_per_node $ngpus \
     --master_port $RANDOM \
     main_pointattn_lang_enhanced_ipa_sa.py \
+    --dataset ${dataset} \
     --valset ${valset} \
     --tasks ${tasks} \
-    --dataset ${dataset} \
     --cameras ${cameras} \
     --max_episodes_per_task ${max_episodes_per_task} \
     --instructions ${instructions} \

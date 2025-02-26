@@ -33,7 +33,7 @@ num_workers=1
 batch_size=16
 batch_size_val=4
 cache_size=100
-cache_size_val=100
+cache_size_val=0
 lr=0.0001
 wd=0.005
 train_iters=200000
@@ -66,7 +66,7 @@ decoder_depth=4
 decoder_dropout=0.0
 distance_scale=1.0
 use_adaln=1
-gripper_history_as_points=0
+gripper_history_as_points=1
 feature_type=sinusoid
 use_center_distance="1"
 use_center_projection="1"
@@ -94,9 +94,9 @@ CUDA_LAUNCH_BLOCKING=1
 # ============================================================
 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     main_pointattn_self_attn.py \
+    --tasks ${tasks} \
     --valset ${valset} \
     --dataset ${dataset} \
-    --tasks ${tasks} \
     --cameras ${cameras} \
     --max_episodes_per_task ${max_episodes_per_task} \
     --instructions ${instructions} \

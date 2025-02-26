@@ -9,7 +9,7 @@ from diffuser_actor.utils.utils import (
 )
 from action_flow.utils.geometry import se3_from_rot_pos
 from action_flow.utils.encoder import SE3GraspPointCloudEncoder, FeaturePCDEncoder
-from action_flow.utils.decoder import LangEnhancedURSADecoder
+from action_flow.utils.decoder import URSATransformerLangEnhanced
 from action_flow.utils.se3_grasp_vector_field import SE3GraspVectorFieldLangEnhanced
 
 from geo3dattn.policy.se3_flowmatching.common.se3_flowmatching import RectifiedLinearFlow
@@ -66,7 +66,7 @@ class SE3FlowMatchingLangEnhanced(nn.Module):
             use_vector_projection=use_vector_projection,
             add_center=add_center
         )
-        decoder = LangEnhancedURSADecoder(d_model=embedding_dim, 
+        decoder = URSATransformerLangEnhanced(d_model=embedding_dim, 
                                           nhead=8, num_layers=decoder_depth, 
                                           dropout=decoder_dropout, 
                                           distance_scale=distance_scale,
