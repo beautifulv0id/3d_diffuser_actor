@@ -14,7 +14,7 @@ valset="/home/share/3D_attn_felix/Peract_packaged/val/"  # REQUIRED
 cameras="wrist left_shoulder right_shoulder front"
 max_episodes_per_task=100
 instructions=/home/share/3D_attn_felix/rlbench_instructions/instructions.pkl
-variations="$(seq 0 199)"
+variations=$(echo {0..199})
 accumulate_grad_batches=1
 gripper_loc_bounds=tasks/18_peract_tasks_location_bounds.json
 gripper_loc_bounds_buffer=0.04
@@ -27,7 +27,6 @@ name=pointattn
 
 # Training Parameters
 seed=0
-#checkpoint="" # Set this value to resume training
 resume=1
 eval_only=0
 num_workers=1
@@ -56,14 +55,14 @@ embedding_dim=120
 quaternion_format=wxyz
 diffusion_timesteps=100
 keypose_only=1
-num_history=1
+num_history=3
 relative_action=0
 scaling_factor=3.0
 use_normals=0
 rot_factor=1.0
 gripper_depth=2
 decoder_depth=4
-decoder_dropout=0.2
+decoder_dropout=0.0
 distance_scale=1.0
 
 task_list=($tasks)
@@ -87,9 +86,9 @@ CUDA_LAUNCH_BLOCKING=1
 # ============================================================
 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     main_pointattn.py \
-    --dataset ${dataset} \
     --valset ${valset} \
     --tasks ${tasks} \
+    --dataset ${dataset} \
     --cameras ${cameras} \
     --max_episodes_per_task ${max_episodes_per_task} \
     --instructions ${instructions} \
@@ -135,5 +134,4 @@ torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --gripper_depth ${gripper_depth} \
     --decoder_depth ${decoder_depth} \
     --decoder_dropout ${decoder_dropout} \
-    --distance_scale ${distance_scale} \
-#    --checkpoint $checkpoint # Set this value to resume training
+    --distance_scale ${distance_scale}

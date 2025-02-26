@@ -39,7 +39,7 @@ class Arguments(tap.Tap):
     val_freq: int = 500
     workspace_bounds: Optional[Path] = "gripper_loc_bounds.json"
     workspace_bounds_buffer: float = 0.04
-    max_workspace_points: Optional[Path] = "max_workspace_points.json"
+    max_workspace_points: Optional[Path] = "tasks/max_workspace_points.json"
     eval_only: int = 0
 
     # Training and validation datasets
@@ -81,7 +81,7 @@ class Arguments(tap.Tap):
     quaternion_format: str = 'wxyz'
     diffusion_timesteps: int = 100
     keypose_only: int = 1
-    num_history: int = 1
+    num_history: int = 3
     relative_action: int = 0
     lang_enhanced: int = 0
     fps_subsampling_factor: int = 5

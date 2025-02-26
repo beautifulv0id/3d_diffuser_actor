@@ -11,8 +11,8 @@
 # REQUIRED: You must set values for these variables
 # ============================================================
 tasks="place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap"  # REQUIRED
-dataset="/workspace/data/Peract_packaged/train/"  # REQUIRED
-valset="/workspace/data/Peract_packaged/val/"  # REQUIRED
+dataset="/workspace/data/Peract_packaged/train"  # REQUIRED
+valset="/workspace/data/Peract_packaged/val"  # REQUIRED
 
 # ============================================================
 # Optional: You can modify these default values
@@ -34,7 +34,6 @@ name=pointattn
 
 # Training Parameters
 seed=0
-#checkpoint="" # Set this value to resume training
 resume=1
 eval_only=0
 num_workers=1
@@ -63,14 +62,14 @@ embedding_dim=120
 quaternion_format=wxyz
 diffusion_timesteps=100
 keypose_only=1
-num_history=1
+num_history=3
 relative_action=0
 scaling_factor=3.0
 use_normals=0
 rot_factor=1.0
 gripper_depth=2
 decoder_depth=4
-decoder_dropout=0.2
+decoder_dropout=0.0
 distance_scale=1.0
 
 task_list=($tasks)
@@ -105,7 +104,6 @@ if [ $SLURM_ARRAY_TASK_ID -gt 0 ] || [ -n "$log_dir" ]; then
 else
     echo "$base_log_dir/$main_dir/$run_log_dir" > $LOG_DIR_FILE
 fi
-
 echo "Starting docker container"
 id=$(docker run -dt \
     -e WANDB_API_KEY=$WANDB_API_KEY \
@@ -118,15 +116,14 @@ id=$(docker run -dt \
 # ============================================================
 # Run training command
 # ============================================================
-
 docker exec -t $id /bin/bash -c "source scripts/slurm/startup-hook.sh && cd /workspace/ &&
     CUDA_LAUNCH_BLOCKING=1 torchrun \
     --nproc_per_node $ngpus \
     --master_port $RANDOM \
     main_pointattn.py \
-    --dataset ${dataset} \
     --valset ${valset} \
     --tasks ${tasks} \
+    --dataset ${dataset} \
     --cameras ${cameras} \
     --max_episodes_per_task ${max_episodes_per_task} \
     --instructions ${instructions} \
@@ -172,6 +169,5 @@ docker exec -t $id /bin/bash -c "source scripts/slurm/startup-hook.sh && cd /wor
     --gripper_depth ${gripper_depth} \
     --decoder_depth ${decoder_depth} \
     --decoder_dropout ${decoder_dropout} \
-    --distance_scale ${distance_scale} \
-#    --checkpoint $checkpoint # Set this value to resume training"
+    --distance_scale ${distance_scale}"
 docker stop $id

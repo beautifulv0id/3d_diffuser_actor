@@ -77,7 +77,7 @@ class Arguments(tap.Tap):
     quaternion_format: str = 'wxyz'
     diffusion_timesteps: int = 100
     keypose_only: int = 1
-    num_history: int = 1
+    num_history: int = 3
     relative_action: int = 0
     scaling_factor: float = 3.0
     use_normals: int = 0

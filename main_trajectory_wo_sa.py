@@ -24,7 +24,6 @@ from utils.common_utils import (
 
 import wandb
 
-
 class Arguments(tap.Tap):
     cameras: Tuple[str, ...] = ("wrist", "left_shoulder", "right_shoulder", "front")
     image_size: str = "256,256"
@@ -80,7 +79,7 @@ class Arguments(tap.Tap):
     quaternion_format: str = 'wxyz'
     diffusion_timesteps: int = 100
     keypose_only: int = 1
-    num_history: int = 1
+    num_history: int = 3
     relative_action: int = 0
     lang_enhanced: int = 0
     fps_subsampling_factor: int = 5

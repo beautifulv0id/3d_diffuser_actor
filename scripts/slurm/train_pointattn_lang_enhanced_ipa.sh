@@ -11,8 +11,8 @@
 # REQUIRED: You must set values for these variables
 # ============================================================
 tasks="place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap"  # REQUIRED
-dataset="/home/share/3D_attn_felix/Peract_packaged/train/"  # REQUIRED
-valset="/home/share/3D_attn_felix/Peract_packaged/val/"  # REQUIRED
+dataset="/workspace/data/Peract_packaged/train"  # REQUIRED
+valset="/workspace/data/Peract_packaged/val"  # REQUIRED
 
 # ============================================================
 # Optional: You can modify these default values
@@ -20,7 +20,7 @@ valset="/home/share/3D_attn_felix/Peract_packaged/val/"  # REQUIRED
 # RLBench
 cameras="wrist left_shoulder right_shoulder front"
 max_episodes_per_task=100
-instructions=/home/share/3D_attn_felix/rlbench_instructions/instructions.pkl
+instructions=/workspace/data/peract/instructions.pkl
 variations=$(echo {0..199})
 accumulate_grad_batches=1
 gripper_loc_bounds=tasks/18_peract_tasks_location_bounds.json
@@ -34,7 +34,6 @@ name=pointattn_lang_enhanced_ipa
 
 # Training Parameters
 seed=0
-#checkpoint="" # Set this value to resume training
 resume=1
 eval_only=0
 num_workers=1
@@ -63,16 +62,16 @@ embedding_dim=120
 quaternion_format=wxyz
 diffusion_timesteps=100
 keypose_only=1
-num_history=1
+num_history=3
 relative_action=0
 scaling_factor=3.0
 use_normals=0
 rot_factor=1.0
 gripper_depth=2
 decoder_depth=4
-decoder_dropout=0.2
+decoder_dropout=0.0
 distance_scale=1.0
-use_adaln=0
+use_adaln=1
 
 task_list=($tasks)
 if [ ${#task_list[@]} -gt 1 ]; then
@@ -123,8 +122,8 @@ docker exec -t $id /bin/bash -c "source scripts/slurm/startup-hook.sh && cd /wor
     --nproc_per_node $ngpus \
     --master_port $RANDOM \
     main_pointattn_lang_enhanced_ipa.py \
-    --dataset ${dataset} \
     --valset ${valset} \
+    --dataset ${dataset} \
     --tasks ${tasks} \
     --cameras ${cameras} \
     --max_episodes_per_task ${max_episodes_per_task} \
@@ -172,6 +171,5 @@ docker exec -t $id /bin/bash -c "source scripts/slurm/startup-hook.sh && cd /wor
     --decoder_depth ${decoder_depth} \
     --decoder_dropout ${decoder_dropout} \
     --distance_scale ${distance_scale} \
-    --use_adaln ${use_adaln} \
-#    --checkpoint $checkpoint # Set this value to resume training"
+    --use_adaln ${use_adaln}"
 docker stop $id

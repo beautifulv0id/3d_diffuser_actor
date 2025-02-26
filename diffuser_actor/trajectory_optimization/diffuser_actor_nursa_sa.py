@@ -549,7 +549,7 @@ class DiffusionHead(nn.Module):
         ])
 
         # Estimate attends to context (no subsampling)
-        self.cross_attn = URSATransformer(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True, point_embedding_dim=point_embedding_dim)
+        self.cross_attn = URSATransformer(d_model=embedding_dim, nhead=num_attn_heads, num_layers=2, use_adaln=True)
         self.self_attn = NURSATransformerEncoder(d_model=embedding_dim, nhead=num_attn_heads, num_layers=4, use_adaln=True, point_embedding_dim=point_embedding_dim)
         # Specific (non-shared) Output layers:
         # 1. Rotation

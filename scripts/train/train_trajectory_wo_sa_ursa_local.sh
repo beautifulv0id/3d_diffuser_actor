@@ -28,7 +28,6 @@ name=3d_diffuser_actor_wo_sa_ursa_local
 
 # Training Parameters
 seed=0
-#checkpoint="" # Set this value to resume training
 resume=1
 eval_only=0
 num_workers=1
@@ -59,7 +58,7 @@ rotation_parametrization=6D
 quaternion_format=wxyz
 diffusion_timesteps=100
 keypose_only=1
-num_history=1
+num_history=3
 relative_action=0
 lang_enhanced=0
 fps_subsampling_factor=5
@@ -131,5 +130,4 @@ torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --num_history ${num_history} \
     --relative_action ${relative_action} \
     --lang_enhanced ${lang_enhanced} \
-    --fps_subsampling_factor ${fps_subsampling_factor} \
-#    --checkpoint $checkpoint # Set this value to resume training
+    --fps_subsampling_factor ${fps_subsampling_factor}

@@ -6,13 +6,13 @@
 #SBATCH --array=0-4%1
 #SBATCH --gres=gpu:1
 #SBATCH --output=train_logs/slurm_logs/%A_train/%a.out
-#SBATCH -J trajectory_nursa
+#SBATCH -J 3d_diffuser_actor_nursa
 # ============================================================
 # REQUIRED: You must set values for these variables
 # ============================================================
 tasks="place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap"  # REQUIRED
-dataset="/home/share/3D_attn_felix/Peract_packaged/train/"  # REQUIRED
-valset="/home/share/3D_attn_felix/Peract_packaged/val/"  # REQUIRED
+dataset="/workspace/data/Peract_packaged/train"  # REQUIRED
+valset="/workspace/data/Peract_packaged/val"  # REQUIRED
 
 # ============================================================
 # Optional: You can modify these default values
@@ -21,7 +21,7 @@ valset="/home/share/3D_attn_felix/Peract_packaged/val/"  # REQUIRED
 cameras="wrist left_shoulder right_shoulder front"
 image_size=256,256
 max_episodes_per_task=100
-instructions=/home/share/3D_attn_felix/rlbench_instructions/instructions.pkl
+instructions=/workspace/data/peract/instructions.pkl
 variations=$(echo {0..199})
 accumulate_grad_batches=1
 
@@ -33,7 +33,6 @@ name=3d_diffuser_actor_nursa
 
 # Training Parameters
 seed=0
-#checkpoint="" # Set this value to resume training
 resume=1
 eval_only=0
 num_workers=1
@@ -56,7 +55,7 @@ pcd_noise=0.0
 image_rescale=0.75,1.25
 
 # Model Parameters
-max_workspace_points=max_workspace_points.json
+max_workspace_points=tasks/max_workspace_points.json
 backbone=clip
 embedding_dim=120
 num_vis_ins_attn_layers=2
@@ -65,7 +64,7 @@ rotation_parametrization=6D
 quaternion_format=wxyz
 diffusion_timesteps=100
 keypose_only=1
-num_history=1
+num_history=3
 relative_action=0
 lang_enhanced=0
 fps_subsampling_factor=5
@@ -79,7 +78,7 @@ else
     task_desc=${task_list[0]}
 fi
 
-run_log_dir=3d_diffuser_actor__nursa_$task_desc-C$embedding_dim-B$batch_size-lr$lr-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-FPS$fps_subsampling_factor
+run_log_dir=3d_diffuser_actor_nursa_$task_desc-C$embedding_dim-B$batch_size-lr$lr-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-FPS$fps_subsampling_factor
 
 
 # ============================================================
@@ -121,9 +120,9 @@ docker exec -t $id /bin/bash -c "source scripts/slurm/startup-hook.sh && cd /wor
     --nproc_per_node $ngpus \
     --master_port $RANDOM \
     main_trajectory_nursa.py \
-    --dataset ${dataset} \
     --valset ${valset} \
     --tasks ${tasks} \
+    --dataset ${dataset} \
     --cameras ${cameras} \
     --image_size ${image_size} \
     --max_episodes_per_task ${max_episodes_per_task} \
@@ -168,6 +167,5 @@ docker exec -t $id /bin/bash -c "source scripts/slurm/startup-hook.sh && cd /wor
     --lang_enhanced ${lang_enhanced} \
     --fps_subsampling_factor ${fps_subsampling_factor} \
     --point_embedding_dim ${point_embedding_dim} \
-    --crop_workspace ${crop_workspace} \
-#    --checkpoint $checkpoint # Set this value to resume training"
+    --crop_workspace ${crop_workspace}"
 docker stop $id

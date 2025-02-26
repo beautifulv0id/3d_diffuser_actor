@@ -26,7 +26,6 @@ name=3d_diffuser_actor_nursa
 
 # Training Parameters
 seed=0
-#checkpoint="" # Set this value to resume training
 resume=1
 eval_only=0
 num_workers=1
@@ -49,7 +48,7 @@ pcd_noise=0.0
 image_rescale=0.75,1.25
 
 # Model Parameters
-max_workspace_points=max_workspace_points.json
+max_workspace_points=tasks/max_workspace_points.json
 backbone=clip
 embedding_dim=120
 num_vis_ins_attn_layers=2
@@ -58,7 +57,7 @@ rotation_parametrization=6D
 quaternion_format=wxyz
 diffusion_timesteps=100
 keypose_only=1
-num_history=1
+num_history=3
 relative_action=0
 lang_enhanced=0
 fps_subsampling_factor=5
@@ -72,7 +71,7 @@ else
     task_desc=${task_list[0]}
 fi
 
-run_log_dir=3d_diffuser_actor__nursa_$task_desc-C$embedding_dim-B$batch_size-lr$lr-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-FPS$fps_subsampling_factor
+run_log_dir=3d_diffuser_actor_nursa_$task_desc-C$embedding_dim-B$batch_size-lr$lr-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-FPS$fps_subsampling_factor
 
 
 # ============================================================
@@ -86,9 +85,9 @@ CUDA_LAUNCH_BLOCKING=1
 # ============================================================
 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     main_trajectory_nursa.py \
-    --dataset ${dataset} \
     --valset ${valset} \
     --tasks ${tasks} \
+    --dataset ${dataset} \
     --cameras ${cameras} \
     --image_size ${image_size} \
     --max_episodes_per_task ${max_episodes_per_task} \
@@ -133,5 +132,4 @@ torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --lang_enhanced ${lang_enhanced} \
     --fps_subsampling_factor ${fps_subsampling_factor} \
     --point_embedding_dim ${point_embedding_dim} \
-    --crop_workspace ${crop_workspace} \
-#    --checkpoint $checkpoint # Set this value to resume training
+    --crop_workspace ${crop_workspace}

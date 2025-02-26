@@ -11,8 +11,8 @@
 # REQUIRED: You must set values for these variables
 # ============================================================
 tasks="place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap"  # REQUIRED
-dataset="/home/share/3D_attn_felix/Peract_packaged/train/"  # REQUIRED
-valset="/home/share/3D_attn_felix/Peract_packaged/val/"  # REQUIRED
+dataset="/workspace/data/Peract_packaged/train"  # REQUIRED
+valset="/workspace/data/Peract_packaged/val"  # REQUIRED
 
 # ============================================================
 # Optional: You can modify these default values
@@ -20,7 +20,7 @@ valset="/home/share/3D_attn_felix/Peract_packaged/val/"  # REQUIRED
 # RLBench
 cameras="wrist left_shoulder right_shoulder front"
 max_episodes_per_task=100
-instructions=/home/share/3D_attn_felix/rlbench_instructions/instructions.pkl
+instructions=/workspace/data/peract/instructions.pkl
 variations=$(echo {0..199})
 accumulate_grad_batches=1
 
@@ -32,7 +32,6 @@ name=pointattn_efficient_self_attn
 
 # Training Parameters
 seed=0
-#checkpoint="" # Set this value to resume training
 resume=1
 eval_only=0
 num_workers=1
@@ -56,13 +55,13 @@ image_rescale=0.75,1.25
 
 # Model Parameters
 feature_res=res3
-max_workspace_points=max_workspace_points.json
+max_workspace_points=tasks/max_workspace_points.json
 backbone=clip
 embedding_dim=120
 quaternion_format=wxyz
 diffusion_timesteps=100
 keypose_only=1
-num_history=1
+num_history=3
 relative_action=0
 fps_subsampling_factor=1
 scaling_factor=3.0
@@ -70,9 +69,9 @@ use_normals=0
 rot_factor=1.0
 gripper_depth=2
 decoder_depth=4
-decoder_dropout=0.2
+decoder_dropout=0.0
 distance_scale=1.0
-use_adaln=0
+use_adaln=1
 gripper_history_as_points=0
 feature_type=sinusoid
 use_center_distance="1"
@@ -132,8 +131,8 @@ docker exec -t $id /bin/bash -c "source scripts/slurm/startup-hook.sh && cd /wor
     --master_port $RANDOM \
     main_pointattn_efficient_self_attn.py \
     --valset ${valset} \
-    --tasks ${tasks} \
     --dataset ${dataset} \
+    --tasks ${tasks} \
     --cameras ${cameras} \
     --max_episodes_per_task ${max_episodes_per_task} \
     --instructions ${instructions} \
@@ -188,6 +187,5 @@ docker exec -t $id /bin/bash -c "source scripts/slurm/startup-hook.sh && cd /wor
     --use_vector_projection ${use_vector_projection} \
     --add_center ${add_center} \
     --point_embedding_dim ${point_embedding_dim} \
-    --crop_workspace ${crop_workspace} \
-#    --checkpoint $checkpoint # Set this value to resume training"
+    --crop_workspace ${crop_workspace}"
 docker stop $id

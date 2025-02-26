@@ -27,7 +27,6 @@ name=pointattn_lang_enhanced_ipa_sa
 
 # Training Parameters
 seed=0
-#checkpoint="" # Set this value to resume training
 resume=1
 eval_only=0
 num_workers=1
@@ -56,16 +55,16 @@ embedding_dim=120
 quaternion_format=wxyz
 diffusion_timesteps=100
 keypose_only=1
-num_history=1
+num_history=3
 relative_action=0
 scaling_factor=3.0
 use_normals=0
 rot_factor=1.0
 gripper_depth=2
 decoder_depth=4
-decoder_dropout=0.2
+decoder_dropout=0.0
 distance_scale=1.0
-use_adaln=0
+use_adaln=1
 fps_subsampling_factor=5
 
 task_list=($tasks)
@@ -90,8 +89,8 @@ CUDA_LAUNCH_BLOCKING=1
 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     main_pointattn_lang_enhanced_ipa_sa.py \
     --valset ${valset} \
-    --dataset ${dataset} \
     --tasks ${tasks} \
+    --dataset ${dataset} \
     --cameras ${cameras} \
     --max_episodes_per_task ${max_episodes_per_task} \
     --instructions ${instructions} \
@@ -139,5 +138,4 @@ torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --decoder_dropout ${decoder_dropout} \
     --distance_scale ${distance_scale} \
     --use_adaln ${use_adaln} \
-    --fps_subsampling_factor ${fps_subsampling_factor} \
-#    --checkpoint $checkpoint # Set this value to resume training
+    --fps_subsampling_factor ${fps_subsampling_factor}

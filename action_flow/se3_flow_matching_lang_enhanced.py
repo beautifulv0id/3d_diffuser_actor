@@ -79,7 +79,8 @@ class SE3FlowMatchingLangEnhanced(nn.Module):
         self.model = SE3GraspVectorFieldLangEnhanced(
             encoder=encoder, 
             decoder=decoder, 
-            latent_dim=embedding_dim)
+            latent_dim=embedding_dim,
+            use_adaln=use_adaln,)
 
         ## Flow Model ##
         self.scaling_factor = torch.tensor(scaling_factor, requires_grad=False)

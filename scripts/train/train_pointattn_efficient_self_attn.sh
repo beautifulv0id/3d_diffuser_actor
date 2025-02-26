@@ -25,7 +25,6 @@ name=pointattn_efficient_self_attn
 
 # Training Parameters
 seed=0
-#checkpoint="" # Set this value to resume training
 resume=1
 eval_only=0
 num_workers=1
@@ -49,13 +48,13 @@ image_rescale=0.75,1.25
 
 # Model Parameters
 feature_res=res3
-max_workspace_points=max_workspace_points.json
+max_workspace_points=tasks/max_workspace_points.json
 backbone=clip
 embedding_dim=120
 quaternion_format=wxyz
 diffusion_timesteps=100
 keypose_only=1
-num_history=1
+num_history=3
 relative_action=0
 fps_subsampling_factor=1
 scaling_factor=3.0
@@ -63,9 +62,9 @@ use_normals=0
 rot_factor=1.0
 gripper_depth=2
 decoder_depth=4
-decoder_dropout=0.2
+decoder_dropout=0.0
 distance_scale=1.0
-use_adaln=0
+use_adaln=1
 gripper_history_as_points=0
 feature_type=sinusoid
 use_center_distance="1"
@@ -97,8 +96,8 @@ CUDA_LAUNCH_BLOCKING=1
 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     main_pointattn_efficient_self_attn.py \
     --valset ${valset} \
-    --tasks ${tasks} \
     --dataset ${dataset} \
+    --tasks ${tasks} \
     --cameras ${cameras} \
     --max_episodes_per_task ${max_episodes_per_task} \
     --instructions ${instructions} \
@@ -153,5 +152,4 @@ torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --use_vector_projection ${use_vector_projection} \
     --add_center ${add_center} \
     --point_embedding_dim ${point_embedding_dim} \
-    --crop_workspace ${crop_workspace} \
-#    --checkpoint $checkpoint # Set this value to resume training
+    --crop_workspace ${crop_workspace}

@@ -16,15 +16,13 @@ from torch.nn import functional as F
 
 from datasets.dataset_engine import RLBenchDataset
 from engine import BaseTrainTester
-from diffuser_actor.trajectory_optimization.diffuser_actor_ipa_sa import DiffuserActorIPASA
+from diffuser_actor.trajectory_optimization.diffuser_actor_nursa_sa import DiffuserActorNURSASA
 
 from utils.common_utils import (
     load_instructions, count_parameters, load_max_workspace_points, get_gripper_loc_bounds
 )
 
 import wandb
-from geo3dattn.model.nursa_transformer.ursa_transformer import NURSATransformer, NURSATransformerEncoder
-
 class Arguments(tap.Tap):
     cameras: Tuple[str, ...] = ("wrist", "left_shoulder", "right_shoulder", "front")
     image_size: str = "256,256"
@@ -39,7 +37,7 @@ class Arguments(tap.Tap):
     val_freq: int = 500
     workspace_bounds: Optional[Path] = None
     workspace_bounds_buffer: float = 0.04
-    max_workspace_points: Optional[Path] = "max_workspace_points.json"
+    max_workspace_points: Optional[Path] = "tasks/max_workspace_points.json"
     eval_only: int = 0
 
     # Training and validation datasets
@@ -81,7 +79,7 @@ class Arguments(tap.Tap):
     quaternion_format: str = 'wxyz'
     diffusion_timesteps: int = 100
     keypose_only: int = 1
-    num_history: int = 1
+    num_history: int = 3
     relative_action: int = 0
     lang_enhanced: int = 0
     fps_subsampling_factor: int = 5
@@ -160,7 +158,7 @@ class TrainTester(BaseTrainTester):
     def get_model(self):
         """Initialize the model."""
         # Initialize model with arguments
-        _model = DiffuserActorIPASA(
+        _model = DiffuserActorNURSASA(
             backbone=self.args.backbone,
             image_size=tuple(int(x) for x in self.args.image_size.split(",")),
             embedding_dim=self.args.embedding_dim,

@@ -120,7 +120,9 @@ def get_argument_defaults(arguments_class, args) -> Dict[str, Any]:
         elif name == "exp_log_dir":
             arg_defaults[name] = "$(./scripts/utils/get_log_path.sh)"            
         elif hasattr(arguments_class, name):
-            arg_defaults[name] = getattr(arguments_class, name)
+            attr = getattr(arguments_class, name)
+            if attr is not None:
+                arg_defaults[name] = attr
 
     arg_defaults["run_log_dir"] = generate_run_log_dir(arg_defaults)
     arg_defaults["variations"] = '$(echo {0..199})'
@@ -156,7 +158,7 @@ def format_value_for_bash(value: Any) -> str:
         return str(value)
 def categorize_arguments(arg_defaults: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     categories = {
-        "RLBench": {"cameras", "image_size", "max_episodes_per_task", "instructions", "tasks", "variations", "accumulate_grad_batches", "gripper_loc_bounds", "gripper_loc_bounds_buffer"},
+        "RLBench": {"cameras", "image_size", "max_episodes_per_task", "instructions", "tasks", "variations", "accumulate_grad_batches", "gripper_loc_bounds", "gripper_loc_bounds_buffer", "workspace_bounds", "workspace_bounds_buffer", "workspace_bounds_offset"},
         "Logging": {"val_freq", "base_log_dir", "exp_log_dir", "run_log_dir", "name", },
         "Training Parameters": {"num_workers", "batch_size", "batch_size_val", "cache_size", "cache_size_val", "lr", "wd", "train_iters", "val_iters", "max_episode_length", "seed", "checkpoint", "resume", "eval_only"},
         "Dataset Augmentations": {"rot_noise", "pos_noise", "pcd_noise", "image_rescale", "dense_interpolation", "interpolation_length"},
@@ -283,7 +285,7 @@ def generate_train_sh(arg_defaults: Dict[str, Any], required_args, main_py: str,
     
     return "\n".join(script)
 
-def generate_slurm_sh(arg_defaults: Dict[str, Any], required_args, main_py: str, example_values: Optional[Dict[str, str]] = None) -> str:
+def generate_slurm_sh(arg_defaults: Dict[str, Any], required_args, main_py: str, volumes = []) -> str:
     """
     Generate a train.sh script with all arguments defined as variables.
     
@@ -294,6 +296,10 @@ def generate_slurm_sh(arg_defaults: Dict[str, Any], required_args, main_py: str,
     Returns:
         String containing the bash script
     """
+    arg_defaults["dataset"] = "/workspace/data/Peract_packaged/train"
+    arg_defaults["valset"] = "/workspace/data/Peract_packaged/val"
+    arg_defaults["instructions"] = "/workspace/data/peract/instructions.pkl"
+
     categorized_args = categorize_arguments(arg_defaults)
     script = ["#!/bin/bash",
         "#SBATCH -t 24:00:00",
@@ -387,11 +393,13 @@ def generate_slurm_sh(arg_defaults: Dict[str, Any], required_args, main_py: str,
     script.extend(['echo "Starting docker container"',
     'id=$(docker run -dt \\',
     '    -e WANDB_API_KEY=$WANDB_API_KEY \\',
-    '    -e WANDB_PROJECT=3d_diffuser_actor_debug \\',
-    '    -v ~/3d_diffuser_actor:/workspace \\',
-    '    -v ~/pointattention/:/pointattention \\',
-    '    -v /home/share/3D_attn_felix/Peract_packaged/:/workspace/data/Peract_packaged/ \\',
-    '    -v /home/share/3D_attn_felix/peract/instructions.pkl:/workspace/data/peract/instructions.pkl \\',
+    '    -e WANDB_PROJECT=3d_diffuser_actor_debug \\' ])
+
+    script.extend([
+    f'    -v {volume} \\' for volume in volumes
+    ])
+
+    script.extend([
     '    --shm-size=32gb oddtoddler400/3d_diffuser_actor:0.0.3)'])
 
     
@@ -470,6 +478,7 @@ def main():
     parser.add_argument("--dataset", default=None, help="Dataset")
     parser.add_argument("--valset", default=None, help="Validation set")
     parser.add_argument("--tasks", default=None, nargs="+", help="Tasks")
+    parser.add_argument("--volumes", default=None, nargs="+", help="Volumes")
         
     args = parser.parse_args()
 
@@ -490,7 +499,7 @@ def main():
     print(f"Generating {args.output}")
 
     train_sh = generate_train_sh(arg_defaults, required_args, args.main_py, example_values)
-    slurm_sh = generate_slurm_sh(arg_defaults, required_args, args.main_py, example_values)
+    slurm_sh = generate_slurm_sh(arg_defaults, required_args, args.main_py, args.volumes)
     
     train_output_path = Path(args.output_dir) / "train" / args.output
     slurm_output_path = Path(args.output_dir) / "slurm" / args.output

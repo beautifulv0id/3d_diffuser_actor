@@ -77,9 +77,9 @@ class Arguments(tap.Tap):
     quaternion_format: str = 'wxyz'
     diffusion_timesteps: int = 100
     keypose_only: int = 1
-    num_history: int = 1
+    num_history: int = 3
     relative_action: int = 0
-    fps_subsampling_factor: int = 10
+    fps_subsampling_factor: int = 5
     scaling_factor: float = 3.0
     use_normals: int = 0
     rot_factor: float = 1.0
@@ -87,7 +87,7 @@ class Arguments(tap.Tap):
     decoder_depth: int = 4
     decoder_dropout: float = 0.0
     distance_scale: float = 1.0
-    use_adaln: int = 0
+    use_adaln: int = 1
     fps_subsampling_factor: int = 1
     gripper_history_as_points: int = 0
     feature_type: str = 'sinusoid'

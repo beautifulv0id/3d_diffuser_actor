@@ -17,6 +17,7 @@ max_episodes_per_task=100
 instructions=/home/share/3D_attn_felix/rlbench_instructions/instructions.pkl
 variations=$(echo {0..199})
 accumulate_grad_batches=1
+workspace_bounds_buffer=0.04
 
 # Logging
 val_freq=500
@@ -26,7 +27,6 @@ name=3d_diffuser_actor_nursa_sa
 
 # Training Parameters
 seed=0
-#checkpoint="" # Set this value to resume training
 resume=1
 eval_only=0
 num_workers=1
@@ -49,9 +49,7 @@ pcd_noise=0.0
 image_rescale=0.75,1.25
 
 # Model Parameters
-workspace_bounds=""
-workspace_bounds_buffer=0.04
-max_workspace_points=max_workspace_points.json
+max_workspace_points=tasks/max_workspace_points.json
 backbone=clip
 embedding_dim=120
 num_vis_ins_attn_layers=2
@@ -60,7 +58,7 @@ rotation_parametrization=6D
 quaternion_format=wxyz
 diffusion_timesteps=100
 keypose_only=1
-num_history=1
+num_history=3
 relative_action=0
 lang_enhanced=0
 fps_subsampling_factor=5
@@ -75,7 +73,7 @@ else
     task_desc=${task_list[0]}
 fi
 
-run_log_dir=3d_diffuser_actor__nursa_sa_$task_desc-C$embedding_dim-B$batch_size-lr$lr-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-FPS$fps_subsampling_factor
+run_log_dir=3d_diffuser_actor_nursa_sa_$task_desc-C$embedding_dim-B$batch_size-lr$lr-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-FPS$fps_subsampling_factor
 
 
 # ============================================================
@@ -90,14 +88,15 @@ CUDA_LAUNCH_BLOCKING=1
 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     main_trajectory_nursa_sa.py \
     --valset ${valset} \
-    --dataset ${dataset} \
     --tasks ${tasks} \
+    --dataset ${dataset} \
     --cameras ${cameras} \
     --image_size ${image_size} \
     --max_episodes_per_task ${max_episodes_per_task} \
     --instructions ${instructions} \
     --variations ${variations} \
     --accumulate_grad_batches ${accumulate_grad_batches} \
+    --workspace_bounds_buffer ${workspace_bounds_buffer} \
     --val_freq ${val_freq} \
     --base_log_dir ${base_log_dir} \
     --exp_log_dir ${exp_log_dir} \
@@ -122,8 +121,6 @@ torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --pos_noise ${pos_noise} \
     --pcd_noise ${pcd_noise} \
     --image_rescale ${image_rescale} \
-    --workspace_bounds ${workspace_bounds} \
-    --workspace_bounds_buffer ${workspace_bounds_buffer} \
     --max_workspace_points ${max_workspace_points} \
     --backbone ${backbone} \
     --embedding_dim ${embedding_dim} \
@@ -139,5 +136,4 @@ torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --fps_subsampling_factor ${fps_subsampling_factor} \
     --point_embedding_dim ${point_embedding_dim} \
     --crop_workspace ${crop_workspace} \
-    --history_as_point ${history_as_point} \
-#    --checkpoint $checkpoint # Set this value to resume training
+    --history_as_point ${history_as_point}

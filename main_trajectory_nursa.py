@@ -38,7 +38,7 @@ class Arguments(tap.Tap):
     accumulate_grad_batches: int = 1
     val_freq: int = 500
     workspace_bounds = torch.tensor([[-0.8, -0.8,  0.5], [1.2, 0.7, 1.8]])
-    max_workspace_points: Optional[Path] = "max_workspace_points.json"
+    max_workspace_points: Optional[Path] = "tasks/max_workspace_points.json"
     eval_only: int = 0
 
     # Training and validation datasets
@@ -80,7 +80,7 @@ class Arguments(tap.Tap):
     quaternion_format: str = 'wxyz'
     diffusion_timesteps: int = 100
     keypose_only: int = 1
-    num_history: int = 1
+    num_history: int = 3
     relative_action: int = 0
     lang_enhanced: int = 0
     fps_subsampling_factor: int = 5
