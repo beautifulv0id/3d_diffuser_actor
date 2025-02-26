@@ -5,8 +5,8 @@
 # ============================================================
 tasks="place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap"  # REQUIRED
 gripper_loc_bounds="tasks/18_peract_tasks_location_bounds.json"  # REQUIRED
-dataset="/home/share/3D_attn_felix/Peract_packaged/train/"  # REQUIRED
-valset="/home/share/3D_attn_felix/Peract_packaged/val/"  # REQUIRED
+dataset="$PERACT_DATA/Peract_packaged/train"  # REQUIRED
+valset="$PERACT_DATA/Peract_packaged/val"  # REQUIRED
 
 # ============================================================
 # Optional: You can modify these default values
@@ -15,7 +15,7 @@ valset="/home/share/3D_attn_felix/Peract_packaged/val/"  # REQUIRED
 cameras="wrist left_shoulder right_shoulder front"
 image_size=256,256
 max_episodes_per_task=100
-instructions=/home/share/3D_attn_felix/rlbench_instructions/instructions.pkl
+instructions=$PERACT_DATA/instructions.pkl
 variations=$(echo {0..199})
 accumulate_grad_batches=1
 gripper_loc_bounds_buffer=0.04
