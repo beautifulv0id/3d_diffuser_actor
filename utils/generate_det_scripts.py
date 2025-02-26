@@ -53,7 +53,7 @@ def generate_det(script_name) -> str:
         '  resource_pool: 42_Compute',
         '  slots_per_trial: 1 # # GPUs',
         '',
-        f'entrypoint: exec bash -c "cd /workspace && source slurm_scripts/startup-hook.sh && bash scripts/{script_name}.sh"',
+        f'entrypoint: exec bash -c "cd /workspace && source scripts/slurm/startup-hook.sh && bash scripts/train/{script_name}.sh"',
         '',
         'searcher:',
         '    name: single',
