@@ -28,7 +28,7 @@ def generate_det(script_name) -> str:
         '    host_path: /pfss/mlde/workspaces/mlde_wsp_PI_Chalvatzaki/home/fh36jega/3d_diffuser_actor',
         '  - container_path: /workspace/data/Peract_packaged',
         '    host_path: /pfss/mlde/workspaces/mlde_wsp_PI_Chalvatzaki/home/fh36jega/data/peract/Peract_packaged',
-        '  - container_path: /workspace/data/peract/instructions.pkl',
+        '  - container_path: /workspace/data/instructions.pkl',
         '    host_path: /pfss/mlde/workspaces/mlde_wsp_PI_Chalvatzaki/home/fh36jega/data/peract/instructions.pkl',
         '  - container_path: /pointattention',
         '    host_path: /pfss/mlde/workspaces/mlde_wsp_PI_Chalvatzaki/home/fh36jega/pointattention',
