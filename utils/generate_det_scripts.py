@@ -37,6 +37,8 @@ def generate_det(script_name) -> str:
         '  environment_variables:',
         '    - WANDB_API_KEY=8009cee998358d908f42c2fce77f1ee094836701',
         '    - WANDB_PROJECT=3d_diffuser_actor_debug',
+        '    - PERACT_DATA=/workspace/data/',
+        '    - POINTATTN_ROOT=/pointattention',
         '  add_capabilities:',
         '    - IPC_LOCK',
         '  drop_capabilities: null',

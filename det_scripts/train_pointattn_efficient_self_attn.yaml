@@ -19,9 +19,9 @@ bind_mounts:
     host_path: /pfss/mlde/workspaces/mlde_wsp_PI_Chalvatzaki/home/fh36jega
   - container_path: /workspace/
     host_path: /pfss/mlde/workspaces/mlde_wsp_PI_Chalvatzaki/home/fh36jega/3d_diffuser_actor
-  - container_path: /workspace/data/Peract_packaged/ 
-    host_path: /pfss/mlde/workspaces/mlde_wsp_PI_Chalvatzaki/home/fh36jega/data/peract/Peract_packaged
-  - container_path: /workspace/data/instructions.pkl
+  - container_path: /workspace/data/Peract_packaged
+    host_path: /pfss/mlde/workspaces/mlde_wsp_PI_Chalvatzaki/home/fh36jega/data/Peract_packaged
+  - container_path: /workspace/data/peract/instructions.pkl
     host_path: /pfss/mlde/workspaces/mlde_wsp_PI_Chalvatzaki/home/fh36jega/data/peract/instructions.pkl
   - container_path: /pointattention
     host_path: /pfss/mlde/workspaces/mlde_wsp_PI_Chalvatzaki/home/fh36jega/pointattention
@@ -30,8 +30,7 @@ environment:
   environment_variables:
     - WANDB_API_KEY=8009cee998358d908f42c2fce77f1ee094836701
     - WANDB_PROJECT=3d_diffuser_actor_debug
-    - DIFFUSER_ACTOR_ROOT=/workspace
-    - PERACT_DATA=/workspace/data
+    - PERACT_DATA=/workspace/data/
     - POINTATTN_ROOT=/pointattention
   add_capabilities:
     - IPC_LOCK
