@@ -46,7 +46,7 @@ resources:
   resource_pool: 42_Compute
   slots_per_trial: 1 # # GPUs
 
-entrypoint: exec bash -c "cd /workspace && source slurm_scripts/startup-hook.sh && bash scripts/train_trajectory_wo_sa_ursa_local.sh"
+entrypoint: exec bash -c "cd /workspace && source scripts/slurm/startup-hook.sh && bash scripts/train/train_trajectory_wo_sa_ursa_local.sh"
 
 searcher:
     name: single
