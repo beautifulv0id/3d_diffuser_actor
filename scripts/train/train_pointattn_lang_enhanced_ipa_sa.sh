@@ -1,11 +1,13 @@
 #!/bin/bash
 
+checkpoint=$1 # Set this value to resume training
+
 # ============================================================
 # REQUIRED: You must set values for these variables
 # ============================================================
-tasks="place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap"  # REQUIRED
-dataset="$PERACT_DATA/Peract_packaged/train"  # REQUIRED
-valset="$PERACT_DATA/Peract_packaged/val"  # REQUIRED
+tasks="place_cups         close_jar         insert_onto_square_peg         light_bulb_in         meat_off_grill         open_drawer         place_shape_in_shape_sorter         place_wine_at_rack_location         push_buttons         put_groceries_in_cupboard         put_item_in_drawer         put_money_in_safe         reach_and_drag         slide_block_to_color_target         stack_blocks         stack_cups         sweep_to_dustpan_of_size         turn_tap"  # REQUIRED
+dataset="$PERACT_DATA/train"  # REQUIRED
+valset="$PERACT_DATA/val"  # REQUIRED
 
 # ============================================================
 # Optional: You can modify these default values
@@ -13,10 +15,9 @@ valset="$PERACT_DATA/Peract_packaged/val"  # REQUIRED
 # RLBench
 cameras="wrist left_shoulder right_shoulder front"
 max_episodes_per_task=100
-instructions=/workspace/data/instructions.pkl
+instructions=$PERACT_DATA/instructions.pkl
 variations=$(echo {0..199})
 accumulate_grad_batches=1
-gripper_loc_bounds=tasks/18_peract_tasks_location_bounds.json
 gripper_loc_bounds_buffer=0.04
 
 # Logging
@@ -63,9 +64,9 @@ rot_factor=1.0
 gripper_depth=2
 decoder_depth=4
 decoder_dropout=0.0
-distance_scale=1.0
 use_adaln=1
 fps_subsampling_factor=5
+gripper_history_as_points=1
 
 task_list=($tasks)
 if [ ${#task_list[@]} -gt 1 ]; then
@@ -74,8 +75,20 @@ else
     task_desc=${task_list[0]}
 fi
 
-run_log_dir=pointattn_lang_enhanced_ipa_sa_$task_desc-C$embedding_dim-B$batch_size-lr$lr-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-FPS$fps_subsampling_factor-FR$feature_res-DS$distance_scale-ADALN$use_adaln
+run_log_dir=pointattn_lang_enhanced_ipa_sa_$task_desc-C$embedding_dim-B$batch_size-lr$lr-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-FPS$fps_subsampling_factor-FR$feature_res-ADALN$use_adaln
 
+# ============================================================
+# Checkpoint format base_log_dir/exp_log_dir//run_log_dir/last.pth
+# ============================================================
+
+if [ -n "$checkpoint" ]; then
+    checkpoint_arg="--checkpoint $checkpoint"
+    base_log_dir=$(echo $checkpoint | cut -d"/" -f1)
+    exp_log_dir=$(echo $checkpoint | cut -d"/" -f2)/$(echo $checkpoint | cut -d"/" -f3)
+    run_log_dir=$(echo $checkpoint | cut -d"/" -f4)
+else
+    checkpoint_arg=""
+fi
 
 # ============================================================
 # Configuration settings
@@ -88,15 +101,14 @@ CUDA_LAUNCH_BLOCKING=1
 # ============================================================
 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     main_pointattn_lang_enhanced_ipa_sa.py \
-    --dataset ${dataset} \
     --valset ${valset} \
     --tasks ${tasks} \
+    --dataset ${dataset} \
     --cameras ${cameras} \
     --max_episodes_per_task ${max_episodes_per_task} \
     --instructions ${instructions} \
     --variations ${variations} \
     --accumulate_grad_batches ${accumulate_grad_batches} \
-    --gripper_loc_bounds ${gripper_loc_bounds} \
     --gripper_loc_bounds_buffer ${gripper_loc_bounds_buffer} \
     --val_freq ${val_freq} \
     --base_log_dir ${base_log_dir} \
@@ -136,6 +148,6 @@ torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --gripper_depth ${gripper_depth} \
     --decoder_depth ${decoder_depth} \
     --decoder_dropout ${decoder_dropout} \
-    --distance_scale ${distance_scale} \
     --use_adaln ${use_adaln} \
-    --fps_subsampling_factor ${fps_subsampling_factor}
+    --fps_subsampling_factor ${fps_subsampling_factor} \
+    --gripper_history_as_points ${gripper_history_as_points}

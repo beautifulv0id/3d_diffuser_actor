@@ -7,6 +7,114 @@ from diffuser_actor.utils.layers import ParallelAttention
 from diffuser_actor.utils.utils import (
     measure_memory
 )
+from geo3dattn.model.ipa_transformer.ipa_transformer import IPATransformer, IPATransformerEncoder
+class LangEnhancedIPADecoder(nn.Module):
+
+    def __init__(self, d_model, nhead, num_layers, use_adaln=False):
+        super().__init__()   
+        self.ipa_layer = nn.ModuleList() 
+        self.lang_layer = nn.ModuleList()
+        dim_head = d_model // nhead
+
+        for _ in range(num_layers):
+            
+            self.ipa_layer.append(IPATransformer(d_model=d_model, 
+                                                 nhead=nhead,
+                                                 num_layers=1,
+                                                 use_adaln=use_adaln))
+            self.lang_layer.append(ParallelAttention(
+            num_layers=1,
+            d_model=d_model, n_heads=nhead,
+            self_attention1=False, self_attention2=False,
+            cross_attention1=True, cross_attention2=False
+        ))
+            
+    def forward(self, tgt, memory, lang_memory, geometric_args, diff_ts=None):
+        tgt_len = tgt.size(1)
+        for ipa_layer, lang_layer in zip(self.ipa_layer, self.lang_layer):
+            tgt = ipa_layer(tgt, memory, geometric_args=geometric_args, diff_ts=diff_ts)
+            feats = torch.cat([tgt, memory], dim=1)
+            feats, _ = lang_layer(
+                seq1=feats, seq1_key_padding_mask=None,
+                seq2=lang_memory, seq2_key_padding_mask=None,
+                seq1_pos=None, seq2_pos=None,
+                seq1_sem_pos=None, seq2_sem_pos=None
+            )
+            tgt, memory = feats[:,:tgt_len], feats[:,tgt_len:]
+        return tgt
+
+
+class LangEnhancedIPASADecoder(nn.Module):
+    def __init__(self, embedding_dim, x1_depth=2, s_depth=2, x2_depth=2, nhead=8, dropout=0.2, use_adaln=False):
+        super().__init__()
+        dim_head = embedding_dim // nhead
+        self.cross_attn1 = IPATransformer(
+            d_model=embedding_dim,
+            nhead=nhead,
+            num_layers=x1_depth,
+            use_adaln=use_adaln
+        )
+        
+        self.self_attn = IPATransformerEncoder(
+            d_model=embedding_dim, 
+            nhead=nhead, 
+            num_layers=s_depth,
+            use_adaln=use_adaln)
+        
+        self.cross_attn2 = IPATransformer(
+            d_model=embedding_dim,
+            nhead=nhead,
+            num_layers=x2_depth,
+            use_adaln=use_adaln
+        )
+        self.lang1 = ParallelAttention(
+            num_layers=1,
+            d_model=embedding_dim, n_heads=nhead,
+            self_attention1=False, self_attention2=False,
+            cross_attention1=True, cross_attention2=False
+        )
+        self.lang2 = ParallelAttention(
+            num_layers=1,
+            d_model=embedding_dim, n_heads=nhead,
+            self_attention1=False, self_attention2=False,
+            cross_attention1=True, cross_attention2=False
+        )
+
+    def forward(self, tgt, cross_memory, self_memory, query_geometric_args, cross_geometric_args, self_geometric_args, lang_memory, diff_ts=None):
+        nact = tgt.size(1)
+        geometric_args = {'query': query_geometric_args, 'key': cross_geometric_args}
+        out = self.cross_attn1(tgt, cross_memory, geometric_args=geometric_args, diff_ts=diff_ts)
+
+        # Language attention
+        out = torch.cat([out, self_memory], dim=1)
+        out, _ = self.lang1(
+            seq1=out, seq1_key_padding_mask=None,
+            seq2=lang_memory, seq2_key_padding_mask=None,
+            seq1_pos=None, seq2_pos=None,
+            seq1_sem_pos=None, seq2_sem_pos=None
+        )
+
+        centers = torch.cat([query_geometric_args['centers'], self_geometric_args['centers']], dim=1)
+        vectors = torch.cat([query_geometric_args['vectors'], self_geometric_args['vectors']], dim=1)
+        geometric_args = {'query': {'centers': centers, 'vectors': vectors}}
+        
+        self_out = self.self_attn(tgt=out, geometric_args=geometric_args, diff_ts=diff_ts)
+
+        self_out, _ = self.lang2(
+            seq1=self_out, seq1_key_padding_mask=None,
+            seq2=lang_memory, seq2_key_padding_mask=None,
+            seq1_pos=None, seq2_pos=None,
+            seq1_sem_pos=None, seq2_sem_pos=None
+        )
+
+        tgt = self_out[:, :nact]
+        cross_memory = self_out[:, nact:]
+        geometric_args = {'query': {'centers': query_geometric_args['centers'][:, :nact], 'vectors': query_geometric_args['vectors'][:, :nact]},
+                          'key': {'centers': geometric_args['query']['centers'][:, nact:], 'vectors': geometric_args['query']['vectors'][:, nact:]}}
+        out = self.cross_attn2(tgt, cross_memory, geometric_args=geometric_args, diff_ts=diff_ts)
+
+        return out
+    
 
 class SE3PCDSelfAttnDecoder(nn.Module):
     def __init__(self, 
@@ -95,10 +203,10 @@ class SE3PCDEfficientSelfAttnDecoder(nn.Module):
 class URSATransformerLangEnhanced(nn.Module):
     def __init__(self, num_layers, nhead, d_model, **kwargs):
         super().__init__()
-        self.ursa_layers = nn.ModuleList([
+        self.ursa_layer = nn.ModuleList([
             URSATransformer(num_layers=1, nhead=nhead, d_model=d_model, **kwargs) for _ in range(num_layers)
         ])
-        self.lang_layers = nn.ModuleList([
+        self.lang_layer = nn.ModuleList([
             ParallelAttention(
             num_layers=1,
             d_model=d_model, n_heads=nhead,
@@ -109,7 +217,7 @@ class URSATransformerLangEnhanced(nn.Module):
         
     def forward(self, tgt, memory, lang_memory, geometric_args, diff_ts=None):
         tgt_len = tgt.size(1)
-        for ursa_layer, lang_layer in zip(self.ursa_layers, self.lang_layers):
+        for ursa_layer, lang_layer in zip(self.ursa_layer, self.lang_layer):
             tgt = ursa_layer(tgt, memory, geometric_args=geometric_args, diff_ts=diff_ts)
             feats = torch.cat([tgt, memory], dim=1)
             feats, _ = lang_layer(
@@ -124,10 +232,10 @@ class URSATransformerLangEnhanced(nn.Module):
 class URSATransformerEncoderLangEnhanced(nn.Module):
     def __init__(self, num_layers, nhead, d_model, **kwargs):
         super().__init__()
-        self.ursa_layers = nn.ModuleList([
+        self.ursa_layer = nn.ModuleList([
             URSATransformerEncoder(num_layers=1, nhead=nhead, d_model=d_model, **kwargs) for _ in range(num_layers)
         ])
-        self.lang_layers = nn.ModuleList([
+        self.lang_layer = nn.ModuleList([
             ParallelAttention(
             num_layers=1,
             d_model=d_model, n_heads=nhead,
@@ -137,7 +245,7 @@ class URSATransformerEncoderLangEnhanced(nn.Module):
         ])
         
     def forward(self, tgt, geometric_args, lang_memory, diff_ts=None):
-        for ursa_layer, lang_layer in zip(self.ursa_layers, self.lang_layers):
+        for ursa_layer, lang_layer in zip(self.ursa_layer, self.lang_layer):
             tgt = ursa_layer(tgt, geometric_args=geometric_args, diff_ts=diff_ts)
             tgt, _ = lang_layer(
                 seq1=tgt, seq1_key_padding_mask=None,

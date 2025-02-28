@@ -14,18 +14,16 @@ valset="$PERACT_DATA/val"  # REQUIRED
 # ============================================================
 # RLBench
 cameras="wrist left_shoulder right_shoulder front"
-image_size=256,256
 max_episodes_per_task=100
 instructions=$PERACT_DATA/instructions.pkl
 variations=$(echo {0..199})
 accumulate_grad_batches=1
-gripper_loc_bounds_buffer=0.04
 
 # Logging
 val_freq=2000
 base_log_dir=train_logs
 exp_log_dir=$(./scripts/utils/get_log_path.sh)
-name=3d_diffuser_actor_wo_sa_nursa
+name=pointattn_efficient_self_attn
 
 # Training Parameters
 seed=0
@@ -51,18 +49,32 @@ pcd_noise=0.0
 image_rescale=0.75,1.25
 
 # Model Parameters
+feature_res=res3
+max_workspace_points=tasks/max_workspace_points.json
 backbone=clip
 embedding_dim=120
-num_vis_ins_attn_layers=2
-use_instruction=1
-rotation_parametrization=6D
 quaternion_format=wxyz
 diffusion_timesteps=100
 keypose_only=1
 num_history=3
 relative_action=0
-lang_enhanced=0
-fps_subsampling_factor=5
+fps_subsampling_factor=1
+scaling_factor=3.0
+use_normals=0
+rot_factor=1.0
+gripper_depth=2
+decoder_depth=4
+decoder_dropout=0.0
+distance_scale=1.0
+use_adaln=1
+gripper_history_as_points=1
+feature_type=sinusoid
+use_center_distance="1"
+use_center_projection="1"
+use_vector_projection="1"
+add_center=1
+point_embedding_dim=120
+crop_workspace=0
 
 task_list=($tasks)
 if [ ${#task_list[@]} -gt 1 ]; then
@@ -71,7 +83,7 @@ else
     task_desc=${task_list[0]}
 fi
 
-run_log_dir=3d_diffuser_actor_wo_sa_nursa_$task_desc-C$embedding_dim-B$batch_size-lr$lr-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-FPS$fps_subsampling_factor
+run_log_dir=pointattn_efficient_self_attn_$task_desc-C$embedding_dim-B$batch_size-lr$lr-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-FPS$fps_subsampling_factor-UCD$use_center_distance-UCP$use_center_projection-UVP$use_vector_projection-AC$add_center-FR$feature_res-FT$feature_type-DS$distance_scale-ADALN$use_adaln
 
 # ============================================================
 # Checkpoint format base_log_dir/exp_log_dir//run_log_dir/last.pth
@@ -96,17 +108,15 @@ CUDA_LAUNCH_BLOCKING=1
 # Run training command
 # ============================================================
 torchrun --nproc_per_node $ngpus --master_port $RANDOM \
-    main_trajectory_wo_sa_nursa.py \
+    main_pointattn_lang_enhanced_nursa_sa.py \
     --valset ${valset} \
     --dataset ${dataset} \
     --tasks ${tasks} \
     --cameras ${cameras} \
-    --image_size ${image_size} \
     --max_episodes_per_task ${max_episodes_per_task} \
     --instructions ${instructions} \
     --variations ${variations} \
     --accumulate_grad_batches ${accumulate_grad_batches} \
-    --gripper_loc_bounds_buffer ${gripper_loc_bounds_buffer} \
     --val_freq ${val_freq} \
     --base_log_dir ${base_log_dir} \
     --exp_log_dir ${exp_log_dir} \
@@ -131,15 +141,29 @@ torchrun --nproc_per_node $ngpus --master_port $RANDOM \
     --pos_noise ${pos_noise} \
     --pcd_noise ${pcd_noise} \
     --image_rescale ${image_rescale} \
+    --feature_res ${feature_res} \
+    --max_workspace_points ${max_workspace_points} \
     --backbone ${backbone} \
     --embedding_dim ${embedding_dim} \
-    --num_vis_ins_attn_layers ${num_vis_ins_attn_layers} \
-    --use_instruction ${use_instruction} \
-    --rotation_parametrization ${rotation_parametrization} \
     --quaternion_format ${quaternion_format} \
     --diffusion_timesteps ${diffusion_timesteps} \
     --keypose_only ${keypose_only} \
     --num_history ${num_history} \
     --relative_action ${relative_action} \
-    --lang_enhanced ${lang_enhanced} \
-    --fps_subsampling_factor ${fps_subsampling_factor}
+    --fps_subsampling_factor ${fps_subsampling_factor} \
+    --scaling_factor ${scaling_factor} \
+    --use_normals ${use_normals} \
+    --rot_factor ${rot_factor} \
+    --gripper_depth ${gripper_depth} \
+    --decoder_depth ${decoder_depth} \
+    --decoder_dropout ${decoder_dropout} \
+    --distance_scale ${distance_scale} \
+    --use_adaln ${use_adaln} \
+    --gripper_history_as_points ${gripper_history_as_points} \
+    --feature_type ${feature_type} \
+    --use_center_distance ${use_center_distance} \
+    --use_center_projection ${use_center_projection} \
+    --use_vector_projection ${use_vector_projection} \
+    --add_center ${add_center} \
+    --point_embedding_dim ${point_embedding_dim} \
+    --crop_workspace ${crop_workspace}

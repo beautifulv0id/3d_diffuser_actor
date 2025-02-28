@@ -8,9 +8,9 @@ from diffuser_actor.utils.utils import (
 )
 from action_flow.utils.geometry import se3_from_rot_pos
 from action_flow.utils.encoder import FeaturePCDEncoder
-from action_flow.ipa.encoder import SE3IPAGraspFPSEncoder
-from action_flow.ipa.decoder import LangEnhancedIPASADecoder
-from action_flow.ipa.se3_grasp_vector_field import SE3GraspVectorFieldLangEnhancedIPASelfAttn
+from action_flow.utils.encoder import SE3IPAGraspFPSEncoder
+from action_flow.utils.decoder import LangEnhancedIPASADecoder
+from action_flow.utils.se3_grasp_vector_field import SE3GraspVectorFieldLangEnhancedSelfAttn
 
 from geo3dattn.policy.se3_flowmatching.common.se3_flowmatching import RectifiedLinearFlow
 
@@ -32,7 +32,7 @@ class SE3FlowMatchingLangEnhancedIPASA(nn.Module):
                  gripper_depth=2,
                  decoder_depth=2,
                  decoder_dropout=0.2,
-                 distance_scale=1.0,
+                 gripper_history_as_points=False,
                  use_adaln=False
                  ):
         super().__init__()
@@ -51,7 +51,10 @@ class SE3FlowMatchingLangEnhancedIPASA(nn.Module):
             nheads=8,
             n_steps_inf=diffusion_timesteps,
             nhist=nhist,
-            fps_subsampling_factor=fps_subsampling_factor
+            fps_subsampling_factor=fps_subsampling_factor,
+            num_vis_ins_attn_layers=1,
+            use_adaln=use_adaln,
+            gripper_history_as_points=gripper_history_as_points
         )
         decoder = LangEnhancedIPASADecoder(embedding_dim=embedding_dim, 
                                           nhead=8, 
@@ -59,9 +62,9 @@ class SE3FlowMatchingLangEnhancedIPASA(nn.Module):
                                           s_depth=decoder_depth,
                                           x2_depth=2, 
                                           dropout=decoder_dropout, 
-                                          use_adaln=use_adaln
+                                          use_adaln=use_adaln,
                                           )
-        self.model = SE3GraspVectorFieldLangEnhancedIPASelfAttn(
+        self.model = SE3GraspVectorFieldLangEnhancedSelfAttn(
             encoder=encoder, 
             decoder=decoder, 
             latent_dim=embedding_dim)

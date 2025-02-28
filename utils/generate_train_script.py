@@ -217,6 +217,8 @@ def generate_train_sh(arg_defaults: Dict[str, Any], required_args, main_py: str,
     """
     categorized_args = categorize_arguments(arg_defaults)
     script = ["#!/bin/bash", 
+              "",
+              "checkpoint=$1 # Set this value to resume training",
               ""]
     
     # Add comment about required arguments
@@ -269,6 +271,21 @@ def generate_train_sh(arg_defaults: Dict[str, Any], required_args, main_py: str,
         '',
         f'run_log_dir={arg_defaults["run_log_dir"]}',
         ''])
+
+    script.extend([
+        '# ============================================================',
+        '# Checkpoint format base_log_dir/exp_log_dir//run_log_dir/last.pth',
+        '# ============================================================',
+        '',
+        'if [ -n "$checkpoint" ]; then',
+        '    checkpoint_arg="--checkpoint $checkpoint"',
+        '    base_log_dir=$(echo $checkpoint | cut -d"/" -f1)',
+        '    exp_log_dir=$(echo $checkpoint | cut -d"/" -f2)/$(echo $checkpoint | cut -d"/" -f3)',
+        '    run_log_dir=$(echo $checkpoint | cut -d"/" -f4)',
+        'else',
+        '    checkpoint_arg=""',
+        'fi'
+    ])
 
     
     # Add additional configuration
@@ -336,6 +353,12 @@ def generate_slurm_sh(arg_defaults: Dict[str, Any], required_args, main_py: str)
         f"#SBATCH --output=train_logs/slurm_logs/%A_{arg_defaults['name']}/%a.out",
         f"#SBATCH -J {arg_defaults['name']}",]
     
+    script.extend([
+        "",
+        "checkpoint=$1 # Set this value to resume training",
+        "",
+    ])
+    
     # Add comment about required arguments
     if len(required_args) > 0:
         script.append("# ============================================================")
@@ -387,7 +410,21 @@ def generate_slurm_sh(arg_defaults: Dict[str, Any], required_args, main_py: str)
         f'run_log_dir={arg_defaults["run_log_dir"]}',
         ''])
 
-    
+    script.extend([
+        '# ============================================================',
+        '# Checkpoint format base_log_dir/exp_log_dir//run_log_dir/last.pth',
+        '# ============================================================',
+        '',
+        'if [ -n "$checkpoint" ]; then',
+        '    checkpoint_arg="--checkpoint $checkpoint"',
+        '    base_log_dir=$(echo $checkpoint | cut -d"/" -f1)',
+        '    exp_log_dir=$(echo $checkpoint | cut -d"/" -f2)/$(echo $checkpoint | cut -d"/" -f3)',
+        '    run_log_dir=$(echo $checkpoint | cut -d"/" -f4)',
+        'else',
+        '    checkpoint_arg=""',
+        'fi'
+    ])
+
     # Add additional configuration
     script.extend([
         "",

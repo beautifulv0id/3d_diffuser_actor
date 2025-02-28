@@ -85,10 +85,9 @@ class Arguments(tap.Tap):
     gripper_depth: int = 2
     decoder_depth: int = 4
     decoder_dropout: float = 0.0
-    distance_scale: float = 1.0
     use_adaln: int = 1
     fps_subsampling_factor: int = 5
-
+    gripper_history_as_points: int = 1
 class TrainTester(BaseTrainTester):
     """Train/test a trajectory optimization algorithm."""
 
@@ -178,8 +177,8 @@ class TrainTester(BaseTrainTester):
             gripper_depth=self.args.gripper_depth,
             decoder_depth=self.args.decoder_depth,
             decoder_dropout=self.args.decoder_dropout,
-            distance_scale=self.args.distance_scale,
-            use_adaln=bool(self.args.use_adaln)
+            use_adaln=bool(self.args.use_adaln),
+            gripper_history_as_points=bool(self.args.gripper_history_as_points)
         )
         print("Model parameters:", count_parameters(_model))
 
