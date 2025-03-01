@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -t 2:00:00
-#SBATCH -c 4
+#SBATCH -c 32
 #SBATCH --mem=32G
 #SBATCH -p gpu
 #SBATCH --gres=gpu:1
@@ -49,8 +49,7 @@ id=$(docker run -dt \
 # Run training command
 # ============================================================
 docker exec -t $id /bin/bash -c "source scripts/slurm/startup-hook.sh && cd /workspace/ && \
-    python data_preprocessing/rearrange_rlbench_demos.py --root_dir /workspace/data/test/ && \
-    CUDA_LAUNCH_BLOCKING=1 xvfb-run -a python online_evaluation_rlbench/evaluate.py \
+    python online_evaluation_rlbench/evaluate.py \
     --tasks $task \
     --checkpoint $checkpoint \
     --headless 1 \

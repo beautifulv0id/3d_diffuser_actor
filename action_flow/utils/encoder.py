@@ -11,7 +11,7 @@ from geo3dattn.encoder.common.position_encoder import PositionalEncoding
 from diffuser_actor.utils.layers import ParallelAttention
 from diffuser_actor.utils.resnet import load_resnet50, load_resnet18
 from diffuser_actor.utils.clip import load_clip
-from geo3dattn.model.ipa_transformer.ipa_transformer import IPATransformer
+from geo3dattn.model.ipa_transformer.ipa_transformer import InvariantPointTransformer
 
 
 def load_model(output_dim, nhead, num_layers, modeltype='ursa'):
@@ -483,10 +483,7 @@ class SE3IPAGraspPointCloudEncoder(ModuleAttrMixin):
         self._gripper_history_as_points = gripper_history_as_points
 
         ## Gripper History Encoder ##
-        self.gripper_decoder = IPATransformer(d_model=dim_features,
-                                                nhead=nheads,
-                                                num_layers=gripper_depth,
-                                                use_adaln=use_adaln)
+        self.gripper_decoder = InvariantPointTransformer(dim=dim_features, depth=gripper_depth, heads=nheads, dim_head=dim_features//nheads, kv_dim=dim_features, dropout=0.0, use_adaln=use_adaln)
 
         ## Instruction Encoder ##
         self.instruction_encoder = nn.Linear(512, dim_features)

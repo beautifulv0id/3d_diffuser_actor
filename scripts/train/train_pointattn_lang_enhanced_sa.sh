@@ -6,8 +6,8 @@ checkpoint=$1 # Set this value to resume training
 # REQUIRED: You must set values for these variables
 # ============================================================
 tasks="place_cups         close_jar         insert_onto_square_peg         light_bulb_in         meat_off_grill         open_drawer         place_shape_in_shape_sorter         place_wine_at_rack_location         push_buttons         put_groceries_in_cupboard         put_item_in_drawer         put_money_in_safe         reach_and_drag         slide_block_to_color_target         stack_blocks         stack_cups         sweep_to_dustpan_of_size         turn_tap"  # REQUIRED
-dataset="$PERACT_DATA/train"  # REQUIRED
-valset="$PERACT_DATA/val"  # REQUIRED
+dataset="$PERACT_DATA/Peract_packaged/train"  # REQUIRED
+valset="$PERACT_DATA/Peract_packaged/val"  # REQUIRED
 
 # ============================================================
 # Optional: You can modify these default values
@@ -31,7 +31,7 @@ seed=0
 resume=1
 eval_only=0
 num_workers=1
-batch_size=16
+batch_size=8
 batch_size_val=4
 cache_size=100
 cache_size_val=0

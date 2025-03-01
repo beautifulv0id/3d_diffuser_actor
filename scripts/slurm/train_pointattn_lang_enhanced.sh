@@ -4,13 +4,16 @@
 #SBATCH --mem=32G
 #SBATCH -p gpu
 #SBATCH --array=0-4%1
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:4
 #SBATCH --output=train_logs/slurm_logs/%A_pointattn_lang_enhanced/%a.out
 #SBATCH -J pointattn_lang_enhanced
+
+checkpoint=$1 # Set this value to resume training
+
 # ============================================================
 # REQUIRED: You must set values for these variables
 # ============================================================
-tasks="place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap"  # REQUIRED
+tasks="place_cups         close_jar         insert_onto_square_peg         light_bulb_in         meat_off_grill         open_drawer         place_shape_in_shape_sorter         place_wine_at_rack_location         push_buttons         put_groceries_in_cupboard         put_item_in_drawer         put_money_in_safe         reach_and_drag         slide_block_to_color_target         stack_blocks         stack_cups         sweep_to_dustpan_of_size         turn_tap"  # REQUIRED
 dataset="/workspace/data/Peract_packaged/train"  # REQUIRED
 valset="/workspace/data/Peract_packaged/val"  # REQUIRED
 
@@ -23,7 +26,6 @@ max_episodes_per_task=100
 instructions=/workspace/data/instructions.pkl
 variations=$(echo {0..199})
 accumulate_grad_batches=1
-gripper_loc_bounds=tasks/18_peract_tasks_location_bounds.json
 gripper_loc_bounds_buffer=0.04
 
 # Logging
@@ -37,9 +39,9 @@ seed=0
 resume=1
 eval_only=0
 num_workers=1
-batch_size=16
+batch_size=8
 batch_size_val=4
-cache_size=100
+cache_size=10
 cache_size_val=0
 lr=0.0001
 wd=0.005
@@ -77,7 +79,7 @@ gripper_history_as_points=1
 feature_type=sinusoid
 use_center_distance="1"
 use_center_projection="1"
-use_vector_projection="1"
+use_vector_projection="0"
 add_center=1
 
 task_list=($tasks)
@@ -89,6 +91,18 @@ fi
 
 run_log_dir=pointattn_lang_enhanced_$task_desc-C$embedding_dim-B$batch_size-lr$lr-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-FPS$fps_subsampling_factor-UCD$use_center_distance-UCP$use_center_projection-UVP$use_vector_projection-AC$add_center-FR$feature_res-FT$feature_type-DS$distance_scale-ADALN$use_adaln
 
+# ============================================================
+# Checkpoint format base_log_dir/exp_log_dir//run_log_dir/last.pth
+# ============================================================
+
+if [ -n "$checkpoint" ]; then
+    checkpoint_arg="--checkpoint $checkpoint"
+    base_log_dir=$(echo $checkpoint | cut -d"/" -f1)
+    exp_log_dir=$(echo $checkpoint | cut -d"/" -f2)/$(echo $checkpoint | cut -d"/" -f3)
+    run_log_dir=$(echo $checkpoint | cut -d"/" -f4)
+else
+    checkpoint_arg=""
+fi
 
 # ============================================================
 # Configuration settings
@@ -118,7 +132,7 @@ id=$(docker run -dt \
    -e WANDB_PROJECT=3d_diffuser_actor_debug \
    -e DIFFUSER_ACTOR_ROOT=/workspace \
    -e PERACT_DATA=/workspace/data \
-   -e POINTATTN_ROOT=/pointattn \
+   -e POINTATTN_ROOT=/pointattention \
    -v $DIFFUSER_ACTOR_ROOT:/workspace \
    -v $POINTATTN_ROOT:/pointattention \
    -v $PERACT_DATA/Peract_packaged/:/workspace/data/Peract_packaged/ \
@@ -140,7 +154,6 @@ docker exec -t $id /bin/bash -c "source scripts/slurm/startup-hook.sh && cd /wor
     --instructions ${instructions} \
     --variations ${variations} \
     --accumulate_grad_batches ${accumulate_grad_batches} \
-    --gripper_loc_bounds ${gripper_loc_bounds} \
     --gripper_loc_bounds_buffer ${gripper_loc_bounds_buffer} \
     --val_freq ${val_freq} \
     --base_log_dir ${base_log_dir} \

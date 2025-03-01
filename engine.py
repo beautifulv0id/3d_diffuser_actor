@@ -35,7 +35,14 @@ class BaseTrainTester:
                                 "local_rank", 
                                 "reproducibility", 
                                 "val_freq", 
-                                "val_iters"]
+                                "val_iters",
+                                "dataset",
+                                "val_dataset",
+                                "base_log_dir",
+                                "exp_log_dir",
+                                "run_log_dir",
+                                "log_dir",
+                                "instructions"]
                 args_ = args.__deepcopy__()
                 args_ = args_.load(file)
                 for key in vars(args_):

@@ -7,10 +7,13 @@
 #SBATCH --gres=gpu:1
 #SBATCH --output=train_logs/slurm_logs/%A_pointattn_lang_enhanced_ipa_sa/%a.out
 #SBATCH -J pointattn_lang_enhanced_ipa_sa
+
+checkpoint=$1 # Set this value to resume training
+
 # ============================================================
 # REQUIRED: You must set values for these variables
 # ============================================================
-tasks="place_cups close_jar insert_onto_square_peg light_bulb_in meat_off_grill open_drawer place_shape_in_shape_sorter place_wine_at_rack_location push_buttons put_groceries_in_cupboard put_item_in_drawer put_money_in_safe reach_and_drag slide_block_to_color_target stack_blocks stack_cups sweep_to_dustpan_of_size turn_tap"  # REQUIRED
+tasks="place_cups         close_jar         insert_onto_square_peg         light_bulb_in         meat_off_grill         open_drawer         place_shape_in_shape_sorter         place_wine_at_rack_location         push_buttons         put_groceries_in_cupboard         put_item_in_drawer         put_money_in_safe         reach_and_drag         slide_block_to_color_target         stack_blocks         stack_cups         sweep_to_dustpan_of_size         turn_tap"  # REQUIRED
 dataset="/workspace/data/Peract_packaged/train"  # REQUIRED
 valset="/workspace/data/Peract_packaged/val"  # REQUIRED
 
@@ -37,8 +40,8 @@ seed=0
 resume=1
 eval_only=0
 num_workers=1
-batch_size=16
-batch_size_val=4
+batch_size=8
+batch_size_val=8
 cache_size=100
 cache_size_val=0
 lr=0.0001
@@ -70,9 +73,9 @@ rot_factor=1.0
 gripper_depth=2
 decoder_depth=4
 decoder_dropout=0.0
-distance_scale=1.0
 use_adaln=1
 fps_subsampling_factor=5
+gripper_history_as_points=1
 
 task_list=($tasks)
 if [ ${#task_list[@]} -gt 1 ]; then
@@ -81,8 +84,20 @@ else
     task_desc=${task_list[0]}
 fi
 
-run_log_dir=pointattn_lang_enhanced_ipa_sa_$task_desc-C$embedding_dim-B$batch_size-lr$lr-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-FPS$fps_subsampling_factor-FR$feature_res-DS$distance_scale-ADALN$use_adaln
+run_log_dir=pointattn_lang_enhanced_ipa_sa_$task_desc-C$embedding_dim-B$batch_size-lr$lr-H$num_history-DT$diffusion_timesteps-RN$rot_noise-PN$pos_noise-PCDN$pcd_noise-FPS$fps_subsampling_factor-FR$feature_res-ADALN$use_adaln
 
+# ============================================================
+# Checkpoint format base_log_dir/exp_log_dir//run_log_dir/last.pth
+# ============================================================
+
+if [ -n "$checkpoint" ]; then
+    checkpoint_arg="--checkpoint $checkpoint"
+    base_log_dir=$(echo $checkpoint | cut -d"/" -f1)
+    exp_log_dir=$(echo $checkpoint | cut -d"/" -f2)/$(echo $checkpoint | cut -d"/" -f3)
+    run_log_dir=$(echo $checkpoint | cut -d"/" -f4)
+else
+    checkpoint_arg=""
+fi
 
 # ============================================================
 # Configuration settings
@@ -112,7 +127,7 @@ id=$(docker run -dt \
    -e WANDB_PROJECT=3d_diffuser_actor_debug \
    -e DIFFUSER_ACTOR_ROOT=/workspace \
    -e PERACT_DATA=/workspace/data \
-   -e POINTATTN_ROOT=/pointattn \
+   -e POINTATTN_ROOT=/pointattention \
    -v $DIFFUSER_ACTOR_ROOT:/workspace \
    -v $POINTATTN_ROOT:/pointattention \
    -v $PERACT_DATA/Peract_packaged/:/workspace/data/Peract_packaged/ \
@@ -126,9 +141,9 @@ docker exec -t $id /bin/bash -c "source scripts/slurm/startup-hook.sh && cd /wor
     --nproc_per_node $ngpus \
     --master_port $RANDOM \
     main_pointattn_lang_enhanced_ipa_sa.py \
-    --dataset ${dataset} \
     --valset ${valset} \
     --tasks ${tasks} \
+    --dataset ${dataset} \
     --cameras ${cameras} \
     --max_episodes_per_task ${max_episodes_per_task} \
     --instructions ${instructions} \
@@ -174,7 +189,7 @@ docker exec -t $id /bin/bash -c "source scripts/slurm/startup-hook.sh && cd /wor
     --gripper_depth ${gripper_depth} \
     --decoder_depth ${decoder_depth} \
     --decoder_dropout ${decoder_dropout} \
-    --distance_scale ${distance_scale} \
     --use_adaln ${use_adaln} \
-    --fps_subsampling_factor ${fps_subsampling_factor}"
+    --fps_subsampling_factor ${fps_subsampling_factor} \
+    --gripper_history_as_points ${gripper_history_as_points}"
 docker stop $id
