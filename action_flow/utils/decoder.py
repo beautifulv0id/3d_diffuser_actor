@@ -10,7 +10,7 @@ from diffuser_actor.utils.utils import (
 from geo3dattn.model.ipa_transformer.ipa_transformer import InvariantPointTransformer
 class LangEnhancedIPADecoder(nn.Module):
 
-    def __init__(self, d_model, nhead, num_layers, use_adaln=False, dropout=0.0):
+    def __init__(self, d_model, nhead, num_layers, use_adaln=False, dropout=0.0, attention_module=InvariantPointTransformer, point_dim=4):
         super().__init__()   
         self.ipa_layer = nn.ModuleList() 
         self.lang_layer = nn.ModuleList()
@@ -23,7 +23,10 @@ class LangEnhancedIPADecoder(nn.Module):
                                                             heads=nhead,
                                                             kv_dim=d_model,
                                                             use_adaln=use_adaln, 
-                                                            dropout=dropout))
+                                                            dropout=dropout,
+                                                            attention_module=attention_module,
+                                                            point_dim=point_dim
+                                                            ))
              
             self.lang_layer.append(ParallelAttention(
             num_layers=1,
@@ -48,19 +51,19 @@ class LangEnhancedIPADecoder(nn.Module):
 
 
 class LangEnhancedIPASADecoder(nn.Module):
-    def __init__(self, embedding_dim, x1_depth=2, s_depth=2, x2_depth=2, nhead=8, dropout=0.2, use_adaln=False):
+    def __init__(self, embedding_dim, x1_depth=2, s_depth=2, x2_depth=2, nhead=8, dropout=0.2, use_adaln=False, attention_module=InvariantPointTransformer, point_dim=4):
         super().__init__()
         dim_head = embedding_dim // nhead
         self.cross_attn1 = InvariantPointTransformer(
-            dim=embedding_dim, depth=x1_depth, heads=nhead, dim_head=dim_head, kv_dim=embedding_dim, use_adaln=use_adaln, dropout=dropout
+            dim=embedding_dim, depth=x1_depth, heads=nhead, dim_head=dim_head, kv_dim=embedding_dim, use_adaln=use_adaln, dropout=dropout, attention_module=attention_module, point_dim=point_dim
         )
         
         self.self_attn = InvariantPointTransformer(
-            dim=embedding_dim, depth=s_depth, heads=nhead, dim_head=dim_head, kv_dim=None, use_adaln=use_adaln, dropout=dropout
+            dim=embedding_dim, depth=s_depth, heads=nhead, dim_head=dim_head, kv_dim=None, use_adaln=use_adaln, dropout=dropout, attention_module=attention_module, point_dim=point_dim
         )
         
         self.cross_attn2 = InvariantPointTransformer(
-            dim=embedding_dim, depth=x2_depth, heads=nhead, dim_head=dim_head, kv_dim=embedding_dim, use_adaln=use_adaln, dropout=dropout
+            dim=embedding_dim, depth=x2_depth, heads=nhead, dim_head=dim_head, kv_dim=embedding_dim, use_adaln=use_adaln, dropout=dropout, attention_module=attention_module, point_dim=point_dim
         )
 
         self.lang1 = ParallelAttention(

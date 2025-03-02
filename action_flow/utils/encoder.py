@@ -11,7 +11,7 @@ from geo3dattn.encoder.common.position_encoder import PositionalEncoding
 from diffuser_actor.utils.layers import ParallelAttention
 from diffuser_actor.utils.resnet import load_resnet50, load_resnet18
 from diffuser_actor.utils.clip import load_clip
-from geo3dattn.model.ipa_transformer.ipa_transformer import InvariantPointTransformer
+from geo3dattn.model.ipa_transformer.ipa_transformer import InvariantPointTransformer, InvariantPointAttention
 
 
 def load_model(output_dim, nhead, num_layers, modeltype='ursa'):
@@ -471,7 +471,7 @@ class FeaturePCDEncoder(ModuleAttrMixin):
         return rgb_features, pcd, normals
     
 class SE3IPAGraspPointCloudEncoder(ModuleAttrMixin):
-    def __init__(self, dim_features=128, gripper_depth=3, nheads=4, n_steps_inf=50, nhist=3, num_vis_ins_attn_layers=2, use_adaln=False, gripper_history_as_points=False):
+    def __init__(self, dim_features=128, gripper_depth=3, nheads=4, n_steps_inf=50, nhist=3, num_vis_ins_attn_layers=2, use_adaln=False, gripper_history_as_points=False, attention_module=InvariantPointAttention, point_dim=4):
         super(SE3IPAGraspPointCloudEncoder, self).__init__()
 
         ## Learnable observation features (Data in Acronym is purely geometrical, no semantics involved)
@@ -483,7 +483,7 @@ class SE3IPAGraspPointCloudEncoder(ModuleAttrMixin):
         self._gripper_history_as_points = gripper_history_as_points
 
         ## Gripper History Encoder ##
-        self.gripper_decoder = InvariantPointTransformer(dim=dim_features, depth=gripper_depth, heads=nheads, dim_head=dim_features//nheads, kv_dim=dim_features, dropout=0.0, use_adaln=use_adaln)
+        self.gripper_decoder = InvariantPointTransformer(dim=dim_features, depth=gripper_depth, heads=nheads, dim_head=dim_features//nheads, kv_dim=dim_features, dropout=0.0, use_adaln=use_adaln, attention_module=attention_module, point_dim=point_dim)
 
         ## Instruction Encoder ##
         self.instruction_encoder = nn.Linear(512, dim_features)
@@ -625,8 +625,8 @@ class SE3IPAGraspPointCloudEncoder(ModuleAttrMixin):
 
 
 class SE3IPAGraspFPSEncoder(SE3IPAGraspPointCloudEncoder):
-    def __init__(self, dim_features=128, gripper_depth=3, nheads=4, n_steps_inf=50, fps_subsampling_factor=5, nhist=3, num_vis_ins_attn_layers=2, use_adaln=False, gripper_history_as_points=False):
-        super(SE3IPAGraspFPSEncoder, self).__init__(dim_features, gripper_depth, nheads, n_steps_inf, nhist, num_vis_ins_attn_layers, use_adaln, gripper_history_as_points)
+    def __init__(self, dim_features=128, gripper_depth=3, nheads=4, n_steps_inf=50, fps_subsampling_factor=5, nhist=3, num_vis_ins_attn_layers=2, use_adaln=False, gripper_history_as_points=False, attention_module=InvariantPointAttention, point_dim=4):
+        super(SE3IPAGraspFPSEncoder, self).__init__(dim_features, gripper_depth, nheads, n_steps_inf, nhist, num_vis_ins_attn_layers, use_adaln, gripper_history_as_points, attention_module, point_dim)
         self.fps_subsampling_factor = fps_subsampling_factor
         output_dim = dim_features
         self.linear = nn.Linear(dim_features, output_dim)

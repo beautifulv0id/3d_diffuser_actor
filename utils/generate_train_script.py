@@ -146,8 +146,8 @@ def get_argument_defaults(arguments_class, args) -> Dict[str, Any]:
     arg_defaults["run_log_dir"] = generate_run_log_dir(arg_defaults)
     arg_defaults["variations"] = '$(echo {0..199})'
     arg_defaults["tasks"] = TASKS
-    arg_defaults["dataset"] = "$PERACT_DATA/train"
-    arg_defaults["valset"] = "$PERACT_DATA/val"
+    arg_defaults["dataset"] = "$PERACT_DATA/Peract_packaged/train"
+    arg_defaults["valset"] = "$PERACT_DATA/Peract_packaged/val"
     arg_defaults["instructions"] = "$PERACT_DATA/instructions.pkl"
             
     return arg_defaults, required_args
@@ -336,11 +336,6 @@ def generate_slurm_sh(arg_defaults: Dict[str, Any], required_args, main_py: str)
     Returns:
         String containing the bash script
     """
-
-    arg_defaults["dataset"] = "/workspace/data/Peract_packaged/train"
-    arg_defaults["valset"] = "/workspace/data/Peract_packaged/val"
-    arg_defaults["instructions"] = "/workspace/data/instructions.pkl"
-
 
     categorized_args = categorize_arguments(arg_defaults)
     script = ["#!/bin/bash",
