@@ -205,12 +205,14 @@ class DiffuserActorIPADecoder(nn.Module):
         tgt = self.position_self_attn(tgt=tgt, geometric_args=geometric_args, diff_ts=diff_ts)
         tgt = tgt[:, :n_act]
         pos = self.position_proj(tgt)
+        pos = self.position_predictor(pos)
         return pos, tgt
     
     def predict_rot(self, tgt, geometric_args, diff_ts, n_act):
         tgt = self.rotation_self_attn(tgt=tgt, geometric_args=geometric_args, diff_ts=diff_ts)
         tgt = tgt[:, :n_act]
         rot = self.rotation_proj(tgt)
+        rot = self.rotation_predictor(rot)
         return rot
 
     
