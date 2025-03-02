@@ -337,6 +337,10 @@ def generate_slurm_sh(arg_defaults: Dict[str, Any], required_args, main_py: str)
         String containing the bash script
     """
 
+    arg_defaults["dataset"] = "/workspace/data/Peract_packaged/train"
+    arg_defaults["valset"] = "/workspace/data/Peract_packaged/val"
+    arg_defaults["instructions"] = "/workspace/data/instructions.pkl"
+
     categorized_args = categorize_arguments(arg_defaults)
     script = ["#!/bin/bash",
         "#SBATCH -t 24:00:00",

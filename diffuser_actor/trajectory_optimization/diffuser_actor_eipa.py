@@ -19,9 +19,9 @@ from diffuser_actor.utils.utils import (
     merge_geometric_args,
     measure_memory
 )
+from geo3dattn.policy.se3_flowmatching.common.euclidean_flowmatching import EuclideanLinearFlow
 
-
-class DiffuserActorURSA(nn.Module):
+class DiffuserActorEIPA(nn.Module):
 
     def __init__(self,
                  backbone="clip",
@@ -73,6 +73,7 @@ class DiffuserActorURSA(nn.Module):
         )
         self.n_steps = diffusion_timesteps
         self.gripper_loc_bounds = torch.tensor(gripper_loc_bounds)
+        self.flow = EuclideanLinearFlow(n_action_steps=1, num_steps=diffusion_timesteps)
 
     def encode_inputs(self, visible_rgb, visible_pcd, instruction,
                       curr_gripper):
@@ -172,48 +173,19 @@ class DiffuserActorURSA(nn.Module):
         )
 
     def conditional_sample(self, condition_data, condition_mask, fixed_inputs):
-        self.position_noise_scheduler.set_timesteps(self.n_steps)
-        self.rotation_noise_scheduler.set_timesteps(self.n_steps)
+        with torch.no_grad():
+            B = condition_data.size(0)
+            trajectory_t = self.flow.generate_random_noise(B, device=condition_data.device)
+            for s in range(0, self.flow.num_steps):
+                step = s * torch.ones_like(trajectory_t[:, 0, 0])
+                out = self.policy_forward_pass(
+                    trajectory_t,
+                    step.long(),
+                    fixed_inputs
+                )[-1]
+                trajectory_t = self.flow.step(trajectory_t, out[..., :9], s)
 
-        # Random trajectory, conditioned on start-end
-        noise = torch.randn(
-            size=condition_data.shape,
-            dtype=condition_data.dtype,
-            device=condition_data.device
-        )
-        # Noisy condition data
-        noise_t = torch.ones(
-            (len(condition_data),), device=condition_data.device
-        ).long().mul(self.position_noise_scheduler.timesteps[0])
-        noise_pos = self.position_noise_scheduler.add_noise(
-            condition_data[..., :3], noise[..., :3], noise_t
-        )
-        noise_rot = self.rotation_noise_scheduler.add_noise(
-            condition_data[..., 3:9], noise[..., 3:9], noise_t
-        )
-        noisy_condition_data = torch.cat((noise_pos, noise_rot), -1)
-        trajectory = torch.where(
-            condition_mask, noisy_condition_data, noise
-        )
-
-        # Iterative denoising
-        timesteps = self.position_noise_scheduler.timesteps
-        for t in timesteps:
-            out = self.policy_forward_pass(
-                trajectory,
-                t * torch.ones(len(trajectory)).to(trajectory.device).long(),
-                fixed_inputs
-            )
-            out = out[-1]  # keep only last layer's output
-            pos = self.position_noise_scheduler.step(
-                out[..., :3], t, trajectory[..., :3]
-            ).prev_sample
-            rot = self.rotation_noise_scheduler.step(
-                out[..., 3:9], t, trajectory[..., 3:9]
-            ).prev_sample
-            trajectory = torch.cat((pos, rot), -1)
-
-        trajectory = torch.cat((trajectory, out[..., 9:]), -1)
+        trajectory = torch.cat((trajectory_t, out[..., 9:]), -1)
 
         return trajectory
 
@@ -318,14 +290,6 @@ class DiffuserActorURSA(nn.Module):
             if self._quaternion_format == 'xyzw':
                 signal[..., 3:7] = signal[..., (4, 5, 6, 3)]
         return signal
-    
-    def trajectory_to_se3(self, trajectory):
-        pos = trajectory[..., :3]
-        rot = trajectory[..., 3:7]
-        if self._quaternion_format == 'xyzw':
-            rot = rot[..., (3, 0, 1, 2)]
-        rot = quaternion_to_matrix(rot)
-        return pos, rot
 
     def convert2rel(self, pcd, curr_gripper):
         """Convert coordinate system relaative to current gripper."""
@@ -392,42 +356,31 @@ class DiffuserActorURSA(nn.Module):
         curr_gripper = self.convert_rot(curr_gripper)
 
         # Prepare inputs
-        fixed_inputs = measure_memory(self.encode_inputs,
+        fixed_inputs = self.encode_inputs(
             rgb_obs, pcd_obs, instruction, curr_gripper
         )
-
-        print("fps size", fixed_inputs[5].shape)
 
         # Condition on start-end pose
         cond_data = torch.zeros_like(gt_trajectory)
         cond_mask = torch.zeros_like(cond_data)
         cond_mask = cond_mask.bool()
 
-        # Sample noise
-        noise = torch.randn(gt_trajectory.shape, device=gt_trajectory.device)
+        batch_size = gt_trajectory.shape[0]
+        a1 = gt_trajectory[...,:9]
+        a0 = self.flow.generate_random_noise(batch_size, device=gt_trajectory.device)
+        timesteps = torch.randint(0, self.flow.num_steps, (batch_size,)).to(device=gt_trajectory.device, dtype=gt_trajectory.dtype)
 
-        # Sample a random timestep
-        timesteps = torch.randint(
-            0,
-            self.position_noise_scheduler.config.num_train_timesteps,
-            (len(noise),), device=noise.device
-        ).long()
+        at = self.flow.flow_at_t(a0, a1, timesteps)
+        # the noisy trajectory should be the sample, i.e., the noisy waypoint that we go through
+        noisy_trajectory = at
+        # the output of the policy should be the vector field at this location
+        noisy_label = self.flow.vector_field_at_t(a1, at, timesteps)
 
-        # Add noise to the clean trajectories
-        pos = self.position_noise_scheduler.add_noise(
-            gt_trajectory[..., :3], noise[..., :3],
-            timesteps
-        )
-        rot = self.rotation_noise_scheduler.add_noise(
-            gt_trajectory[..., 3:9], noise[..., 3:9],
-            timesteps
-        )
-        noisy_trajectory = torch.cat((pos, rot), -1)
         noisy_trajectory[cond_mask] = cond_data[cond_mask]  # condition
         assert not cond_mask.any()
 
         # Predict the noise residual
-        pred = measure_memory(self.policy_forward_pass,
+        pred = self.policy_forward_pass(
             noisy_trajectory, timesteps, fixed_inputs
         )
 
@@ -437,8 +390,8 @@ class DiffuserActorURSA(nn.Module):
             trans = layer_pred[..., :3]
             rot = layer_pred[..., 3:9]
             loss = (
-                30 * F.l1_loss(trans, noise[..., :3], reduction='mean')
-                + 10 * F.l1_loss(rot, noise[..., 3:9], reduction='mean')
+                30 * F.l1_loss(trans, noisy_label[..., :3], reduction='mean')
+                + 10 * F.l1_loss(rot, noisy_label[..., 3:9], reduction='mean')
             )
             if torch.numel(gt_openess) > 0:
                 openess = layer_pred[..., 9:]
